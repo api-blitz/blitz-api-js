@@ -1,6 +1,6 @@
 {
   "name": "blitz-api-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed TypeScript SDK for the Blitz API — B2B data, search, and enrichment.",
   "type": "module",
   "sideEffects": false,
