@@ -10,6 +10,7 @@ import {
 } from "../src/index.js";
 import * as data from "./data.js";
 import {
+  bodyReadFailureResponse,
   FakeFetch,
   jsonResponse,
   networkError,
@@ -95,18 +96,55 @@ describe("retry policy", () => {
     expect(sleeps.calls).toEqual([]);
   });
 
-  it("retries timeouts then raises APITimeoutError", async () => {
+  it("does not retry a timeout (avoids re-billing a possibly-processed request)", async () => {
     const sleeps = new SleepRecorder();
-    const ff = new FakeFetch([timeoutError(), timeoutError(), timeoutError()]);
+    // A second queued response proves we *could* have retried — but must not.
+    const ff = new FakeFetch([timeoutError(), jsonResponse(data.KEY_INFO)]);
     const error = await clientWith(ff.fetch, sleeps)
       .account.key_info()
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(APITimeoutError);
-    expect(ff.calls).toBe(3);
-    expect(sleeps.calls).toHaveLength(2);
+    expect(ff.calls).toBe(1);
+    expect(sleeps.calls).toEqual([]);
   });
 
-  it("retries connection errors then raises APIConnectionError", async () => {
+  it("retries a pre-response network error, then succeeds", async () => {
+    const sleeps = new SleepRecorder();
+    const ff = new FakeFetch([networkError(), jsonResponse(data.KEY_INFO)]);
+    const info = await clientWith(ff.fetch, sleeps).account.key_info();
+    expect(info.valid).toBe(true);
+    expect(ff.calls).toBe(2);
+    expect(sleeps.calls).toHaveLength(1);
+  });
+
+  it("does not retry a failure that happens after the response arrives", async () => {
+    const sleeps = new SleepRecorder();
+    const ff = new FakeFetch([bodyReadFailureResponse()]);
+    const error = await clientWith(ff.fetch, sleeps)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(APIConnectionError);
+    expect(ff.calls).toBe(1);
+    expect(sleeps.calls).toEqual([]);
+  });
+
+  it("does not retry a read timeout after the request was sent (issue #2 scenario)", async () => {
+    const sleeps = new SleepRecorder();
+    // Timeout fires while reading the body: the server may already have run the
+    // billable POST, so surface APITimeoutError without re-sending it.
+    const ff = new FakeFetch([
+      bodyReadFailureResponse(timeoutError()),
+      jsonResponse(data.KEY_INFO),
+    ]);
+    const error = await clientWith(ff.fetch, sleeps)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(APITimeoutError);
+    expect(ff.calls).toBe(1);
+    expect(sleeps.calls).toEqual([]);
+  });
+
+  it("retries pre-response connection errors then raises APIConnectionError", async () => {
     const sleeps = new SleepRecorder();
     const ff = new FakeFetch([networkError(), networkError(), networkError()]);
     const error = await clientWith(ff.fetch, sleeps)

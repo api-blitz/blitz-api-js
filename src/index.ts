@@ -17,6 +17,8 @@
 export { BlitzAPI, type BlitzAPIOptions } from "./client.js";
 export {
   APIConnectionError,
+  APIResponseValidationError,
+  type APIResponseValidationErrorOptions,
   APIStatusError,
   type APIStatusErrorOptions,
   APITimeoutError,

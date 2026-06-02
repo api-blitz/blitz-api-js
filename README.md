@@ -151,11 +151,15 @@ paginated.
 const client = new BlitzAPI({
   api_key: undefined, // falls back to BLITZ_API_KEY
   base_url: "https://api.blitz-api.ai",
-  timeout: 30, // seconds (per request, via AbortSignal.timeout)
-  max_retries: 3, // retries on 429 / 5xx / network errors
+  timeout: 30, // default per-request timeout, seconds (via AbortSignal.timeout)
+  max_retries: 3, // retries on 429 / 5xx / pre-response network errors
   rate_limit_rps: 5, // client-side token bucket; null to disable
   fetch: undefined, // custom fetch implementation (tests / runtimes)
 });
+
+// Override the timeout for a single call — pass an options object as the last
+// argument to any method (it never appears on the wire):
+await client.enrichment.email({ person_linkedin_url: "…" }, { timeout: 5 });
 ```
 
 The client-side rate limiter is a token bucket: it admits at most `rate_limit_rps`
@@ -169,6 +173,7 @@ processes you may still hit `429` — the retry path handles that.
 ```ts
 import {
   APIConnectionError,
+  APIResponseValidationError,
   APIStatusError,
   APITimeoutError,
   AuthenticationError,
@@ -186,6 +191,8 @@ try {
     // 402 — out of credits
   } else if (err instanceof AuthenticationError) {
     // 401 — bad key
+  } else if (err instanceof APIResponseValidationError) {
+    // 2xx, but the body wasn't valid JSON or didn't match the schema (err.cause has details)
   } else if (err instanceof APIStatusError) {
     console.log(err.status_code, err.message, err.body, err.request_id);
   } else if (err instanceof BlitzError) {
@@ -195,8 +202,12 @@ try {
 ```
 
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
-`max_retries`; `401`/`402`/`404` throw immediately. Timeouts and network errors
-are retried and then surface as `APITimeoutError` / `APIConnectionError`.
+`max_retries`; `401`/`402`/`404` throw immediately. A **pre-response** network
+error (DNS failure, connection refused) is retried, then surfaces as
+`APIConnectionError`. **Timeouts are not retried** — with `fetch` we can't tell
+whether the request already reached the (per-result-billed) server, so a timeout
+surfaces immediately as `APITimeoutError` rather than risk a double charge. Raise
+the per-call `timeout` for genuinely slow endpoints instead.
 
 ## Forward compatibility
 

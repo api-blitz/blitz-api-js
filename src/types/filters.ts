@@ -194,3 +194,12 @@ export interface DomainToLinkedinParams {
 export interface CurrentDateParams {
   region: string;
 }
+
+/** Per-call request controls, accepted as the optional last argument of every method. */
+export interface RequestOptions {
+  /**
+   * Per-request timeout in **seconds**. Overrides the client-wide `timeout` for
+   * this single call (and, for a paginated method, every page it fetches).
+   */
+  timeout?: number;
+}

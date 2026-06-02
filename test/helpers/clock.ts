@@ -62,3 +62,18 @@ export function timeoutError(): Error {
 export function networkError(message = "fetch failed"): Error {
   return new TypeError(message);
 }
+
+/**
+ * A `Response` stand-in whose body read rejects — models a transport failure that
+ * happens *after* the status/headers arrived. The request reached the server (and
+ * may have been billed), so the client must treat it as terminal, not retry it.
+ */
+export function bodyReadFailureResponse(error: Error = networkError("body read failed")): Response {
+  return {
+    ok: true,
+    status: 200,
+    url: "https://api.blitz-api.ai/v2/account/key-info",
+    headers: new Headers(),
+    text: () => Promise.reject(error),
+  } as unknown as Response;
+}

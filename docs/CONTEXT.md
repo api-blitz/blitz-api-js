@@ -96,9 +96,14 @@ deserialization between SDK releases.
   response includes top-level `company_linkedin_url`, `max_results`, and
   `results_length` (its old spec example was `null`, so the Python model omits
   them). The TS `WaterfallIcpResponse` includes them.
-- **Pagination** (no Python analog): `search.people`/`companies` (cursor) and
-  `search.employee_finder` (page) return a `PagePromise` (`src/pagination.ts`),
-  Stainless/OpenAI-style but snake_case. `await` it for the first `Page` (`.data`
+- **Pagination**: `search.people`/`companies` (cursor) and `search.employee_finder`
+  (page) return a `PagePromise` (`src/pagination.ts`), Stainless/OpenAI-style but
+  snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates these three
+  (`AsyncCursorPage`/`AsyncPageNumberPage`, `auto_paging_iter`/`iter_pages`); the public
+  surfaces intentionally diverge — TS uses `.data` + `for await` + `.collect()` and a
+  non-advancing-cursor guard (which Python lacks), where Python uses `.results` +
+  `auto_paging_iter()` and names the offset class `PageNumberPage` (TS: `OffsetPage`).
+  `await` it for the first `Page` (`.data`
   items + `.response` raw 1:1 body + `has_next_page()`/`get_next_page()`/`iter_pages()`),
   or `for await` it to stream every item across pages (each page fetched on demand,
   through the rate limiter). This changed those three methods' return type from
@@ -164,6 +169,7 @@ retry per policy.
 ```
 BlitzError
 ├── APIConnectionError -> APITimeoutError      # request never completed
+├── APIResponseValidationError                 # 2xx body not JSON / wrong shape; .status_code, .request_id, .cause
 └── APIStatusError                             # non-2xx; .status_code, .body, .message, .request_id
     ├── AuthenticationError       # 401
     ├── InsufficientCreditsError  # 402
@@ -214,7 +220,8 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   is not paginated. The cursor guard catches an immediate non-advancing cursor but not
   a multi-step cycle (A→B→A) — the API's stable cursors + 1k-page limit + `max_items`
   make this a non-issue in practice.
-- No streaming, no per-call timeout override, no response caching.
+- No streaming, no response caching. A per-call `timeout` override exists (options-bag
+  arg, see §10); timeouts are terminal (not retried).
 - Rate limiter does not auto-detect the per-key limit from `key_info` (uses 5 rps).
 - Response models are validated against the spec's *examples*, not a formal response
   schema (the API doesn't publish one); `z.looseObject` is the safety net.
@@ -223,6 +230,17 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-06-02** — Closed three parity gaps found by comparing against `blitz-api-py`:
+  **(G1)** timeouts are now **terminal** — the request loop only retries *pre-response*
+  network errors, never a timeout, because `fetch`+`AbortSignal.timeout` can't tell
+  whether a per-result-billed POST already reached the server (Python distinguishes
+  connect- vs read-phase via httpx; fetch can't, so we err on not re-billing).
+  **(G2)** a 2xx body that isn't JSON or fails Zod now raises `APIResponseValidationError`
+  (a `BlitzError`) instead of leaking a raw `ZodError`; merged `parse_json_body` +
+  `parse_model` into `parse_success_body`. **(G3)** added a per-call `timeout` via an
+  options-bag second arg (`method(params, { timeout })`), threaded through
+  `client.request` and propagated across paginated page fetches. Left the pagination
+  *surface* naming and the sync-client/context-manager omissions as intentional.
 - **2026-06-01** — Hardened list-field parsing: introduced `blitzList(item)` and
   replaced every response `z.array(...).default([])` with it. `.default([])` only
   fills `undefined`, so an explicit `null` from the API threw a `ZodError` (escaping

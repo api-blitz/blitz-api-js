@@ -9,10 +9,10 @@
 import type * as z from "zod";
 import * as C from "./constants.js";
 import {
+  APIResponseValidationError,
   APIStatusError,
   type APIStatusErrorOptions,
   AuthenticationError,
-  BlitzError,
   InsufficientCreditsError,
   NotFoundError,
   RateLimitError,
@@ -100,19 +100,6 @@ function parse_body(text: string): unknown {
   }
 }
 
-/**
- * Strict body parser for the *success* path. A 2xx with an empty or non-JSON
- * body is a protocol violation we can't model, so surface it as a
- * {@link BlitzError} rather than letting a raw `SyntaxError` escape the client.
- */
-export function parse_json_body(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new BlitzError("Could not parse the API response body as JSON.");
-  }
-}
-
 export function make_status_error(response: Response, bodyText: string): APIStatusError {
   const body = parse_body(bodyText);
   let message: string | undefined;
@@ -130,6 +117,33 @@ export function make_status_error(response: Response, bodyText: string): APIStat
   return new ErrorClass(message, { response, body });
 }
 
-export function parse_model<S extends z.ZodType>(data: unknown, schema: S): z.infer<S> {
-  return schema.parse(data);
+/**
+ * Parse and validate a *success* (2xx) response body. A non-JSON body, or one
+ * that does not match the response schema, is a protocol violation we can't
+ * model, so it surfaces as an {@link APIResponseValidationError} (inside the
+ * `BlitzError` hierarchy) carrying the `response` and the underlying parse/Zod
+ * error on `.cause` — never a raw `SyntaxError`/Zod error escaping the client.
+ */
+export function parse_success_body<S extends z.ZodType>(
+  response: Response,
+  text: string,
+  schema: S,
+): z.infer<S> {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch (cause) {
+    throw new APIResponseValidationError(`Expected a JSON response body from ${response.url}.`, {
+      response,
+      cause,
+    });
+  }
+  try {
+    return schema.parse(data);
+  } catch (cause) {
+    throw new APIResponseValidationError("The API response did not match the expected schema.", {
+      response,
+      cause,
+    });
+  }
 }
