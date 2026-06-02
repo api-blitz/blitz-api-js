@@ -1,0 +1,18 @@
+name: PR Title
+
+# release-please derives versions and the changelog from Conventional Commits.
+# Squash-merge uses the PR title as the commit subject, so enforce the format here.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
