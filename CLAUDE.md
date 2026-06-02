@@ -42,16 +42,21 @@ pnpm lint && pnpm typecheck && pnpm gen:enums:check && pnpm test && pnpm build
 3. Response model → add a `blitzObject` schema in the right `src/types/<group>.ts`,
    reusing `shared.ts` models; export it from `src/types/index.ts`.
 4. Resource method → add it to the class in `src/resources/<group>.ts`, calling
-   `this.client.request("POST", path, params, ResponseSchema)` with a path constant.
+   `this.client.request("POST", path, params, ResponseSchema, options)` with a path
+   constant; accept an optional `options?: RequestOptions` (per-call `timeout`) last
+   arg and pass it through (paginated methods capture it in the page-fetch closure).
 5. Tests → a parse test in `test/models.test.ts` (+ payload in `test/data.ts`) and a
    request/response test in `test/resources.test.ts`.
 6. Run all checks. Use a `feat:` commit.
 
 ## Retry / errors / rate limit (mirror, do not drift)
 
-- Retry only `429` and `>= 500` (and network/timeout); `401/402/404` throw immediately.
+- Retry `429`, `>= 500`, and **pre-response** network errors; **timeouts are terminal**
+  (never retried — a timed-out, per-result-billed POST may already have run);
+  `401/402/404` throw immediately.
 - 429 waits `Retry-After` or 60s; else exponential backoff `min(8, 0.5*2^(n-1)) + jitter`.
 - Error hierarchy in `src/errors.ts`; status map `{401,402,404,429}` else
-  `ServerError` (5xx) / `APIStatusError`.
+  `ServerError` (5xx) / `APIStatusError`. A 2xx body that isn't JSON or fails Zod
+  raises `APIResponseValidationError` (also a `BlitzError`), via `parse_success_body`.
 - Rate limiter is a token bucket (`src/rate-limit.ts`); `now`/`sleep` are injectable
   for tests. Client `fetch`/`sleep` are injectable too.

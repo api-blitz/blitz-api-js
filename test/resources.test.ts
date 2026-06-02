@@ -3,6 +3,7 @@
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import {
+  APITimeoutError,
   BlitzAPI,
   CompanyEnrichmentResponse,
   CurrentDateResponse,
@@ -162,5 +163,66 @@ describe("resources", () => {
     const result = await client().utils.current_date({ region: "America/New_York" });
     expect(CurrentDateResponse.parse(result)).toBeTruthy();
     expect(body).toEqual({ region: "America/New_York" });
+  });
+
+  it("applies the per-call timeout, overriding the client default", async () => {
+    // A fetch that only ever settles when its AbortSignal fires. The client
+    // default is 30s; the per-call 20ms must be what aborts it.
+    const hangUntilAbort: typeof globalThis.fetch = (_url, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal | null | undefined;
+        signal?.addEventListener("abort", () => reject(signal.reason));
+      });
+    const c = new BlitzAPI({
+      api_key: TEST_KEY,
+      rate_limit_rps: null,
+      timeout: 30,
+      fetch: hangUntilAbort,
+    });
+    const error = await c.enrichment
+      .email({ person_linkedin_url: "https://www.linkedin.com/in/example" }, { timeout: 0.02 })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(APITimeoutError);
+  });
+
+  it("never sends the per-call timeout on the wire", async () => {
+    let body: unknown;
+    let requestUrl: string | undefined;
+    server.use(
+      http.post(`${BASE}/v2/enrichment/email`, async ({ request }) => {
+        requestUrl = request.url;
+        body = await request.json();
+        return HttpResponse.json(data.EMAIL_ENRICHMENT);
+      }),
+    );
+    await client().enrichment.email(
+      { person_linkedin_url: "https://www.linkedin.com/in/example" },
+      { timeout: 5 },
+    );
+    expect(body).toEqual({ person_linkedin_url: "https://www.linkedin.com/in/example" });
+    expect(requestUrl).not.toContain("timeout");
+  });
+
+  it("threads request options through paginated page fetches without leaking them", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    let calls = 0;
+    server.use(
+      http.post(`${BASE}/v2/search/people`, async ({ request }) => {
+        calls += 1;
+        bodies.push((await request.json()) as Record<string, unknown>);
+        // Page 1 carries a cursor; page 2 returns a null cursor to stop the walk.
+        const payload = calls === 1 ? data.PEOPLE_SEARCH : { ...data.PEOPLE_SEARCH, cursor: null };
+        return HttpResponse.json(payload);
+      }),
+    );
+
+    const collected = [];
+    for await (const person of client().search.people({ max_results: 1 }, { timeout: 5 })) {
+      collected.push(person);
+    }
+
+    expect(calls).toBe(2);
+    expect(collected).toHaveLength(2);
+    for (const sent of bodies) expect(sent).not.toHaveProperty("timeout");
   });
 });

@@ -4,8 +4,7 @@ import {
   build_headers,
   build_url,
   make_status_error,
-  parse_json_body,
-  parse_model,
+  parse_success_body,
   retry_delay,
   should_retry,
   to_jsonable,
@@ -17,6 +16,7 @@ import { AccountResource } from "./resources/account.js";
 import { EnrichmentResource } from "./resources/enrichment.js";
 import { SearchResource } from "./resources/search.js";
 import { UtilsResource } from "./resources/utils.js";
+import type { RequestOptions } from "./types/filters.js";
 
 type FetchFn = typeof fetch;
 
@@ -93,31 +93,33 @@ export class BlitzAPI {
     path: string,
     body: unknown,
     schema: S,
+    options?: RequestOptions,
   ): Promise<z.infer<S>> {
     const url = build_url(this.base_url, path);
     const headers = build_headers(this.api_key);
     const jsonBody = body === undefined ? undefined : to_jsonable(body);
     const fetchFn = this.#fetch;
+    const timeoutMs = options?.timeout !== undefined ? options.timeout * 1000 : this.#timeoutMs;
 
     let attempt = 0;
     for (;;) {
       await this.#rateLimiter.acquire();
 
       let response: Response;
-      let bodyText: string;
       try {
         response = await fetchFn(url, {
           method,
           headers,
           body: jsonBody === undefined ? undefined : JSON.stringify(jsonBody),
-          signal: AbortSignal.timeout(this.#timeoutMs),
+          signal: AbortSignal.timeout(timeoutMs),
         });
-        // Read the body here, inside the try, so a timeout/abort or stream
-        // failure mid-read is handled like any other transport error (retried,
-        // then wrapped) instead of escaping as a raw DOMException.
-        bodyText = await response.text();
       } catch (error) {
-        if (attempt < this.max_retries) {
+        // A timeout is terminal: with `fetch` we can't tell whether the request
+        // already reached the server, and the API bills per request, so we must
+        // not re-send a possibly-processed (billable) POST. Only a network error
+        // *before* any response arrived (DNS failure, connection refused) is known
+        // never to have reached the server, so it stays retryable.
+        if (!isTimeout(error) && attempt < this.max_retries) {
           attempt += 1;
           await this.#sleep(backoff_seconds(attempt));
           continue;
@@ -127,8 +129,19 @@ export class BlitzAPI {
           : new APIConnectionError(errorMessage(error));
       }
 
+      let bodyText: string;
+      try {
+        bodyText = await response.text();
+      } catch (error) {
+        // The response already arrived (and the server may have billed for it),
+        // so a failure reading the body is terminal — never re-send the request.
+        throw isTimeout(error)
+          ? new APITimeoutError()
+          : new APIConnectionError(errorMessage(error));
+      }
+
       if (response.ok) {
-        return parse_model(parse_json_body(bodyText), schema);
+        return parse_success_body(response, bodyText, schema);
       }
 
       if (should_retry(response.status) && attempt < this.max_retries) {

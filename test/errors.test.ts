@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { to_jsonable } from "../src/base-client.js";
 import {
+  APIResponseValidationError,
   APIStatusError,
   AuthenticationError,
   BlitzAPI,
@@ -62,21 +63,36 @@ describe("status errors", () => {
     expect(err.body).toBe("upstream exploded");
   });
 
-  it("wraps a non-JSON 2xx body as a BlitzError", async () => {
+  it("wraps a non-JSON 2xx body as APIResponseValidationError", async () => {
     const ff = new FakeFetch([textResponse("<html>not json</html>", 200)]);
     const error = await client(ff.fetch)
       .account.key_info()
       .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(APIResponseValidationError);
     expect(error).toBeInstanceOf(BlitzError);
     expect(error).not.toBeInstanceOf(SyntaxError);
   });
 
-  it("wraps an empty 2xx body as a BlitzError", async () => {
+  it("wraps an empty 2xx body as APIResponseValidationError", async () => {
     const ff = new FakeFetch([textResponse("", 200)]);
     const error = await client(ff.fetch)
       .account.key_info()
       .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(APIResponseValidationError);
+  });
+
+  it("wraps a wrong-shape 2xx body as APIResponseValidationError with details", async () => {
+    // Valid JSON, but `42` is not the KeyInfo object shape -> Zod rejects it.
+    const ff = new FakeFetch([jsonResponse(42, { headers: { "x-request-id": "req_v" } })]);
+    const error = await client(ff.fetch)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(APIResponseValidationError);
     expect(error).toBeInstanceOf(BlitzError);
+    const err = error as APIResponseValidationError;
+    expect(err.status_code).toBe(200);
+    expect(err.request_id).toBe("req_v");
+    expect(err.cause).toBeDefined();
   });
 });
 

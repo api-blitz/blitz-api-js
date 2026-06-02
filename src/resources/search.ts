@@ -10,6 +10,7 @@ import type {
   CompanySearchParams,
   EmployeeFinderParams,
   PeopleSearchParams,
+  RequestOptions,
   WaterfallIcpParams,
 } from "../types/filters.js";
 import {
@@ -33,14 +34,15 @@ export class SearchResource {
    * Cursor-paginated — `for await (const person of …)` to stream all results, or
    * `await` for the first page (`.data`, `.response`, `.has_next_page()`).
    */
-  people({
-    max_items,
-    ...params
-  }: PeopleSearchParams = {}): PagePromise<Person, PeopleSearchResponse> {
+  people(
+    { max_items, ...params }: PeopleSearchParams = {},
+    options?: RequestOptions,
+  ): PagePromise<Person, PeopleSearchResponse> {
     return make_cursor_page_promise<Person, PeopleSearchResponse>(
       params.cursor,
       max_items,
-      (cursor) => this.client.request("POST", PEOPLE, { ...params, cursor }, PeopleSearchResponse),
+      (cursor) =>
+        this.client.request("POST", PEOPLE, { ...params, cursor }, PeopleSearchResponse, options),
       (r) => r.results,
       (r) => r.cursor,
     );
@@ -50,15 +52,21 @@ export class SearchResource {
    * Find companies matching ICP filters (industry, size, HQ, revenue, ...).
    * Cursor-paginated (see {@link SearchResource.people}).
    */
-  companies({
-    max_items,
-    ...params
-  }: CompanySearchParams = {}): PagePromise<Company, CompanySearchResponse> {
+  companies(
+    { max_items, ...params }: CompanySearchParams = {},
+    options?: RequestOptions,
+  ): PagePromise<Company, CompanySearchResponse> {
     return make_cursor_page_promise<Company, CompanySearchResponse>(
       params.cursor,
       max_items,
       (cursor) =>
-        this.client.request("POST", COMPANIES, { ...params, cursor }, CompanySearchResponse),
+        this.client.request(
+          "POST",
+          COMPANIES,
+          { ...params, cursor },
+          CompanySearchResponse,
+          options,
+        ),
       (r) => r.results,
       (r) => r.cursor,
     );
@@ -68,15 +76,21 @@ export class SearchResource {
    * Search employees at a single company. Page-paginated (1-based) — increments
    * `page` until it exceeds `total_pages`.
    */
-  employee_finder({
-    max_items,
-    ...params
-  }: EmployeeFinderParams): PagePromise<Person, EmployeeFinderResponse> {
+  employee_finder(
+    { max_items, ...params }: EmployeeFinderParams,
+    options?: RequestOptions,
+  ): PagePromise<Person, EmployeeFinderResponse> {
     return make_offset_page_promise<Person, EmployeeFinderResponse>(
       params.page ?? 1,
       max_items,
       (page) =>
-        this.client.request("POST", EMPLOYEE_FINDER, { ...params, page }, EmployeeFinderResponse),
+        this.client.request(
+          "POST",
+          EMPLOYEE_FINDER,
+          { ...params, page },
+          EmployeeFinderResponse,
+          options,
+        ),
       (r) => r.results,
       (r) => r.total_pages,
     );
@@ -86,7 +100,10 @@ export class SearchResource {
    * Find the best decision-maker at a company via a prioritized cascade.
    * Not paginated — returns a single ranked result set.
    */
-  waterfall_icp(params: WaterfallIcpParams): Promise<WaterfallIcpResponse> {
-    return this.client.request("POST", WATERFALL, params, WaterfallIcpResponse);
+  waterfall_icp(
+    params: WaterfallIcpParams,
+    options?: RequestOptions,
+  ): Promise<WaterfallIcpResponse> {
+    return this.client.request("POST", WATERFALL, params, WaterfallIcpResponse, options);
   }
 }
