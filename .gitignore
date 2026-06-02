@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+
+# TS build info
+*.tsbuildinfo
