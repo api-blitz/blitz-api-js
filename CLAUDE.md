@@ -22,8 +22,12 @@ changes — it records the design decisions so you don't re-derive them.
   non-advancing cursor to avoid an infinite loop); offset at `page >= total_pages`.
   Cursor/offset wiring is shared via `make_cursor_page_promise`/`make_offset_page_promise`.
   `waterfall_icp` is not paginated. Keep helper names snake_case.
-- **`enums.ts` is generated** — never hand-edit. Edit `openapi/enum-source.json`
-  then `pnpm gen:enums`. CI drift guard: `pnpm gen:enums:check`.
+- **`enums.ts` and `openapi/enum-source.json` are both generated** — never
+  hand-edit. Run `pnpm gen:enums:fetch` to pull the live spec
+  (`https://api.blitz-api.ai/openapi`), de-dup the inlined enums, and rewrite
+  both files; commit both. CI drift guard `pnpm gen:enums:check` stays **offline**
+  (renders from the committed cache — never fetches), so it never breaks on a
+  network blip or an upstream change.
 - Superset models with optional fields (`.nullish()` scalars, `blitzList(...)` for
   lists — coerces a missing **or `null`** value to `[]`), not per-endpoint duplicates.
   Numeric fields use `z.number().nullish()`. Use plain `.nullish()` only for a list the

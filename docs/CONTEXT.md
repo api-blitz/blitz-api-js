@@ -148,8 +148,10 @@ src/
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
     account/search/enrichment/utils.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
-scripts/gen-enums.ts        Regenerates types/enums.ts from openapi/enum-source.json.
-openapi/enum-source.json    Vendored enum value lists (copied byte-for-byte from blitz-api-py).
+scripts/gen-enums.ts        --fetch pulls the live spec, de-dups, rewrites the cache + enums.ts;
+                            default/--check render from the cache offline (CI drift guard).
+openapi/enum-source.json    GENERATED cache: deduped enum lists pulled from the OpenAPI spec
+                            (https://api.blitz-api.ai/openapi) by `pnpm gen:enums:fetch`.
 test/                       Vitest + MSW (resources/models) and a fake clock/fetch (retry/etc).
 .github/workflows/          ci.yml, release.yml, pr-title.yml.
 ```
@@ -230,6 +232,25 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-06-03** — Enum generator now pulls from the live OpenAPI spec
+  (`https://api.blitz-api.ai/openapi`) instead of a hand-vendored file.
+  `scripts/gen-enums.ts --fetch` walks the spec, maps each inlined enum to a name
+  by its owning request property (`PROPERTY_TO_CLASS`), collapses the 6–12
+  byte-identical duplicate occurrences, de-dups exact-repeat values, and rewrites
+  both the committed cache `openapi/enum-source.json` and `src/types/enums.ts`.
+  Verified byte-identical to the previous output for all 7 enums (incl. the
+  double-escaped `Women\\'s Handbag Manufacturing`). Kept the drift guard
+  **offline** (only `--fetch` hits the network): CI's `pnpm gen:enums:check`
+  re-renders from the committed cache and never depends on the network or breaks
+  on upstream change — refreshes land as deliberate PRs. The generator **throws**
+  (rather than silently shrinking output) if a mapped enum is missing upstream or
+  its duplicate occurrences diverge, and warns-and-ignores an unmapped enum.
+  The `publish` job in `release.yml` adds a **release-time sync gate**: it runs
+  `gen:enums:fetch` and fails if the regenerated `src/types/enums.ts` differs from
+  what's committed, so no release can ship enums stale vs prod. It diffs only the
+  rendered `enums.ts` (which carries no spec metadata), so a `spec_version`-only
+  bump never spuriously blocks a release (the only CI use of the network; per-PR
+  `ci.yml` stays offline).
 - **2026-06-02** — Closed three parity gaps found by comparing against `blitz-api-py`:
   **(G1)** timeouts are now **terminal** — the request loop only retries *pre-response*
   network errors, never a timeout, because `fetch`+`AbortSignal.timeout` can't tell

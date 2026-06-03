@@ -57,6 +57,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "gen:enums": "tsx scripts/gen-enums.ts",
+    "gen:enums:fetch": "tsx scripts/gen-enums.ts --fetch",
     "gen:enums:check": "tsx scripts/gen-enums.ts --check"
   },
   "dependencies": {
