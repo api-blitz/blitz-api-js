@@ -1,5 +1,10 @@
 # blitz-api-js
 
+[![npm version](https://img.shields.io/npm/v/blitz-api-js.svg)](https://www.npmjs.com/package/blitz-api-js)
+[![types included](https://img.shields.io/npm/types/blitz-api-js.svg)](https://www.npmjs.com/package/blitz-api-js)
+[![CI](https://github.com/api-blitz/blitz-api-js/actions/workflows/ci.yml/badge.svg)](https://github.com/api-blitz/blitz-api-js/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/npm/l/blitz-api-js.svg)](./LICENSE)
+
 The typed TypeScript SDK for the [Blitz API](https://blitz-api.ai) — B2B data,
 search, and enrichment.
 
@@ -16,11 +21,29 @@ search, and enrichment.
 
 > Create and manage API keys at [app.blitz-api.ai](https://app.blitz-api.ai).
 
+> **Billing.** Blitz bills **per result**. A bare `for await` over a search
+> streams every match up to the server-side limit (people: 50k results), which can be a
+> lot of credits. Bound spend with **`max_items`** (a client-side total cap, never sent
+> on the wire) — details in [Pagination](#pagination).
+
+## Contents
+
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Example: find, enrich, collect](#example-find-enrich-collect)
+- [Authentication](#authentication)
+- [Endpoints](#endpoints)
+- [Pagination](#pagination)
+- [Configuration](#configuration)
+- [Error handling](#error-handling)
+- [Forward compatibility](#forward-compatibility)
+- [Development](#development)
+
 ## Installation
 
 ```bash
 npm install blitz-api-js
-# or: pnpm add blitz-api-js   /   yarn add blitz-api-js
+# or: pnpm add blitz-api-js   /   yarn add blitz-api-js   /   bun add blitz-api-js
 ```
 
 Requires Node.js 20+. Ships both ESM and CommonJS builds.
@@ -60,6 +83,68 @@ CommonJS works too:
 
 ```js
 const { BlitzAPI } = require("blitz-api-js");
+```
+
+## Example: find, enrich, collect
+
+A complete flow — find people, enrich each one's verified work email, collect the
+contacts. `max_items` caps the total fetched so the run can't surprise you with credits.
+
+```ts
+import { BlitzAPI } from "blitz-api-js";
+
+const client = new BlitzAPI(); // reads BLITZ_API_KEY
+
+// 1. Find up to 25 VPs at software companies (snake_case filters, 1:1 with the API).
+const leads = await client.search
+  .people({
+    company: { industry: { include: ["Software Development"] } },
+    people: { job_level: ["VP"] },
+    max_results: 25,
+    max_items: 25, // client-side total cap — bounds credit spend
+  })
+  .collect();
+
+// 2. Enrich each lead's verified work email from their LinkedIn profile URL.
+const contacts: { name?: string | null; email?: string | null }[] = [];
+for (const person of leads) {
+  if (!person.linkedin_url) continue;
+  const result = await client.enrichment.email({
+    person_linkedin_url: person.linkedin_url,
+  });
+  if (result.found) {
+    contacts.push({ name: person.full_name, email: result.email });
+  }
+}
+
+console.log(`Collected ${contacts.length} contacts`);
+```
+
+What comes back is typed and snake_case. A `person` from the search above (fields are a
+**superset** — only what the profile has is populated, and unknown fields the API adds
+later are preserved, typed as `unknown`):
+
+```ts
+{
+  full_name: "Jordan Lee",
+  headline: "VP of Engineering at Acme",
+  linkedin_url: "https://www.linkedin.com/in/example-person",
+  location: { city: "San Francisco", state_code: "CA", country_code: "US", continent: "North America" },
+  experiences: [
+    { job_title: "VP of Engineering", company_name: "Acme", job_is_current: true },
+  ],
+  // first_name, last_name, skills, education, certifications, … also present
+}
+```
+
+And `enrichment.email(...)` returns:
+
+```ts
+{
+  found: true,
+  email: "jordan@acme.com",
+  all_emails: [{ email: "jordan@acme.com", email_domain: "acme.com" }],
+}
 ```
 
 ## Authentication
