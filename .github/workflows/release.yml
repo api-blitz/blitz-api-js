@@ -50,5 +50,21 @@ jobs:
       # Trusted Publishing (OIDC + provenance) requires npm >= 11.5.1.
       - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
+      # Release-time drift gate: refuse to publish enums that are stale vs the
+      # live prod spec. This is the ONE place that fetches the spec in CI (per-PR
+      # `ci.yml` stays offline/hermetic). The generator retries transient blips
+      # (3 attempts, 15s timeout); if the spec endpoint is down, re-run this job.
+      # We diff only the rendered `src/types/enums.ts` (the shipped artifact, which
+      # carries no spec metadata) so a pure upstream `info.version` bump with no
+      # enum-value change doesn't spuriously fail the release.
+      - name: Verify enums are in sync with the live API spec
+        run: |
+          pnpm gen:enums:fetch
+          if ! git diff --quiet -- src/types/enums.ts; then
+            echo "::error::Committed enums are stale vs the live spec (https://api.blitz-api.ai/openapi). Run \`pnpm gen:enums:fetch\`, commit src/types/enums.ts + openapi/enum-source.json, then re-release."
+            git --no-pager diff -- src/types/enums.ts openapi/enum-source.json
+            exit 1
+          fi
+          echo "Enums are in sync with the live spec."
       - run: pnpm build
       - run: npm publish --access public
