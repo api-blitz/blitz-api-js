@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/api-blitz/blitz-api-js/compare/v0.2.0...v0.3.0) (2026-06-04)
+
+
+### Features
+
+* generate enums from the live OpenAPI spec with dedup ([98d8942](https://github.com/api-blitz/blitz-api-js/commit/98d894257214e90f3406e3548166a23d672f3d28))
+* generate enums from the live OpenAPI spec with dedup ([b35eddd](https://github.com/api-blitz/blitz-api-js/commit/b35eddda7f4cdea5a352251e47724591c75ded83))
+
 ## [0.2.0](https://github.com/api-blitz/blitz-api-js/compare/v0.1.0...v0.2.0) (2026-06-02)
 
 
