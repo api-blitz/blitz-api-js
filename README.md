@@ -168,7 +168,7 @@ All methods are grouped into four namespaces:
 | `client.account` | `key_info()` |
 | `client.search` | `people()`, `companies()`, `employee_finder()`, `waterfall_icp()` |
 | `client.enrichment` | `email()`, `phone()`, `email_to_person()`, `phone_to_person()`, `company()`, `domain_to_linkedin()`, `linkedin_to_domain()` |
-| `client.utils` | `current_date()`, `company_employment_distribution()` |
+| `client.utils` | `current_date()`, `company_employment_distribution()`, `company_department_distribution()` |
 
 Each method takes a single options object (snake_case keys) and returns a typed,
 Zod-validated response (also snake_case). Enum-backed filter fields (e.g.

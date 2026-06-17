@@ -172,8 +172,9 @@ export interface PersonLinkedinUrlParams {
 }
 
 /**
- * Params for `enrichment.company`, `enrichment.linkedin_to_domain`, and
- * `utils.company_employment_distribution`.
+ * Params for `enrichment.company`, `enrichment.linkedin_to_domain`,
+ * `utils.company_employment_distribution`, and
+ * `utils.company_department_distribution`.
  */
 export interface CompanyLinkedinUrlParams {
   company_linkedin_url: string;

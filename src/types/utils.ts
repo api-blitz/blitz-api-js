@@ -28,3 +28,20 @@ export const CompanyEmploymentDistributionResponse = blitzObject({
 export type CompanyEmploymentDistributionResponse = z.infer<
   typeof CompanyEmploymentDistributionResponse
 >;
+
+/** Employee count for a single department. */
+export const DepartmentDistributionItem = blitzObject({
+  department: z.string().nullish(),
+  count: z.number().nullish(),
+});
+export type DepartmentDistributionItem = z.infer<typeof DepartmentDistributionItem>;
+
+/** Result of `utils.company_department_distribution`. */
+export const CompanyDepartmentDistributionResponse = blitzObject({
+  company_linkedin_url: z.string().nullish(),
+  total_employees: z.number().nullish(),
+  distribution: blitzList(DepartmentDistributionItem),
+});
+export type CompanyDepartmentDistributionResponse = z.infer<
+  typeof CompanyDepartmentDistributionResponse
+>;

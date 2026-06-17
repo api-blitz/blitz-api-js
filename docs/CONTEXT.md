@@ -54,6 +54,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/enrichment/linkedin-to-domain` | `enrichment.linkedin_to_domain()` | `LinkedinToDomainResponse` |
 | POST | `/v2/utils/current-date` | `utils.current_date()` | `CurrentDateResponse` |
 | POST | `/v2/utils/company-employment-distribution` | `utils.company_employment_distribution()` | `CompanyEmploymentDistributionResponse` |
+| POST | `/v2/utils/company-department-distribution` | `utils.company_department_distribution()` | `CompanyDepartmentDistributionResponse` |
 
 ### Re-deriving the API surface
 

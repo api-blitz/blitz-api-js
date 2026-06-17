@@ -172,7 +172,7 @@ export class BlitzAPI {
     return this.#enrichment;
   }
 
-  /** Utilities: current date, employment distribution. */
+  /** Utilities: current date, employment & department distribution. */
   get utils(): UtilsResource {
     this.#utils ??= new UtilsResource(this);
     return this.#utils;

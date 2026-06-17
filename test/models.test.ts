@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  CompanyDepartmentDistributionResponse,
   CompanyEmploymentDistributionResponse,
   CompanyEnrichmentResponse,
   CompanySearchResponse,
@@ -113,6 +114,13 @@ describe("response models", () => {
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.country).toBe("US");
     expect(resp.distribution[0]?.count).toBe(900);
+  });
+
+  it("parses department distribution", () => {
+    const resp = CompanyDepartmentDistributionResponse.parse(data.DEPARTMENT_DISTRIBUTION);
+    expect(resp.total_employees).toBe(1234);
+    expect(resp.distribution[0]?.department).toBe("Engineering");
+    expect(resp.distribution[0]?.count).toBe(320);
   });
 
   it("coerces null list fields to [] (top-level and nested)", () => {

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   APITimeoutError,
   BlitzAPI,
+  CompanyDepartmentDistributionResponse,
   CompanyEnrichmentResponse,
   CurrentDateResponse,
   EmailEnrichmentResponse,
@@ -163,6 +164,22 @@ describe("resources", () => {
     const result = await client().utils.current_date({ region: "America/New_York" });
     expect(CurrentDateResponse.parse(result)).toBeTruthy();
     expect(body).toEqual({ region: "America/New_York" });
+  });
+
+  it("utils.company_department_distribution posts the company url and types the response", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/utils/company-department-distribution`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.DEPARTMENT_DISTRIBUTION);
+      }),
+    );
+    const result = await client().utils.company_department_distribution({
+      company_linkedin_url: "https://www.linkedin.com/company/openai",
+    });
+    expect(CompanyDepartmentDistributionResponse.parse(result)).toBeTruthy();
+    expect(result.distribution[0]?.department).toBe("Engineering");
+    expect(body).toEqual({ company_linkedin_url: "https://www.linkedin.com/company/openai" });
   });
 
   it("applies the per-call timeout, overriding the client default", async () => {

@@ -153,3 +153,12 @@ export const EMPLOYMENT_DISTRIBUTION = {
     { country: "unknown", count: 54 },
   ],
 };
+
+export const DEPARTMENT_DISTRIBUTION = {
+  company_linkedin_url: "https://www.linkedin.com/company/openai",
+  total_employees: 1234,
+  distribution: [
+    { department: "Engineering", count: 320 },
+    { department: "Other", count: 54 },
+  ],
+};
