@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/api-blitz/blitz-api-js/compare/v0.3.0...v0.4.0) (2026-06-17)
+
+
+### Features
+
+* add company department distribution endpoint and update related documentation ([06c1d32](https://github.com/api-blitz/blitz-api-js/commit/06c1d32e9e3c0575f26c2727e0f747b8776ccd34))
+
 ## [0.3.0](https://github.com/api-blitz/blitz-api-js/compare/v0.2.0...v0.3.0) (2026-06-04)
 
 
