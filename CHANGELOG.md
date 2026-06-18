@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/api-blitz/blitz-api-js/compare/v0.4.0...v0.5.0) (2026-06-18)
+
+
+### Features
+
+* rate-limit per endpoint instead of globally ([7e038d5](https://github.com/api-blitz/blitz-api-js/commit/7e038d5a4e72756ddc1a529d8334a2c97a54253a))
+
 ## [0.4.0](https://github.com/api-blitz/blitz-api-js/compare/v0.3.0...v0.4.0) (2026-06-17)
 
 
