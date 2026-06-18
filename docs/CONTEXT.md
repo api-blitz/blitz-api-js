@@ -30,7 +30,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 
 - **Base URL**: `https://api.blitz-api.ai`
 - **Auth**: `x-api-key` HTTP header (NOT `Authorization`).
-- **Rate limit**: 5 req/s on all plans; per-key value in
+- **Rate limit**: 5 req/s **per endpoint** on all plans; your per-endpoint value in
   `key_info.max_requests_per_seconds`.
 - **OpenAPI**: 3.1.0, version `2.0.0`. All endpoints are `/v2/...`.
 - **Status conventions**: 401 invalid/missing key · 402 insufficient credits ·
@@ -132,7 +132,9 @@ src/
   version.ts      Single source of version. `// x-release-please-version` marker.
   constants.ts    Base URL, env var, header, timeout, retries, rps(5), 429 wait(60s), UA.
   errors.ts       Exception hierarchy (see §6).
-  rate-limit.ts   RateLimiter: token bucket; injectable now()/sleep().
+  rate-limit.ts   RateLimiter: a single token bucket; injectable now()/sleep().
+                  The client holds one per endpoint path (Map), so each endpoint is
+                  throttled independently.
   base-client.ts  IO-free: to_jsonable, build_url/headers, should_retry, backoff_seconds,
                   retry_delay, make_status_error, parse_json_body, parse_model.
                   STATUS_ERRORS maps code->class.
@@ -159,7 +161,8 @@ test/                       Vitest + MSW (resources/models) and a fake clock/fet
 ### Request flow
 
 `resource.method(params)` → `client.request(method, path, params, schema)` →
-`to_jsonable(params)` (drop null/undefined, recurse) → `rateLimiter.acquire()` →
+`to_jsonable(params)` (drop null/undefined, recurse) → `rateLimiterFor(path).acquire()`
+(the per-endpoint bucket) →
 `fetch(url, { …, signal: AbortSignal.timeout })` → on `res.ok`,
 `schema.parse(await res.json())`; on non-2xx, map to an error; on 429/5xx/network,
 retry per policy.
@@ -224,7 +227,15 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   make this a non-issue in practice.
 - No streaming, no response caching. A per-call `timeout` override exists (options-bag
   arg, see §10); timeouts are terminal (not retried).
-- Rate limiter does not auto-detect the per-key limit from `key_info` (uses 5 rps).
+- Rate limiting is **per endpoint**: the client holds one token bucket per endpoint path
+  (lazy `Map` in `client.ts`), each sized at `rate_limit_rps` (5 by default), so a burst on
+  one endpoint (e.g. `enrichment.email`) never throttles another (e.g. `enrichment.phone`).
+  This mirrors the API, whose server-side limit is itself **per endpoint** (5 rps on each
+  endpoint independently, per the docs), so a single client instance stays under the limit on
+  every endpoint. The 429 retry path remains the backstop for bursts across processes (each
+  process has its own buckets). `blitz-api-py` is also per endpoint (sliding window there vs.
+  token bucket here), so the "mirror 1:1" parity holds.
+- Rate limiter does not auto-detect your per-endpoint limit from `key_info` (uses 5 rps).
 - Response models are validated against the spec's *examples*, not a formal response
   schema (the API doesn't publish one); `z.looseObject` is the safety net.
 
