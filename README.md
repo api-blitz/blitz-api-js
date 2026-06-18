@@ -238,7 +238,7 @@ const client = new BlitzAPI({
   base_url: "https://api.blitz-api.ai",
   timeout: 30, // default per-request timeout, seconds (via AbortSignal.timeout)
   max_retries: 3, // retries on 429 / 5xx / pre-response network errors
-  rate_limit_rps: 5, // client-side token bucket; null to disable
+  rate_limit_rps: 5, // per-endpoint client-side token bucket; null to disable
   fetch: undefined, // custom fetch implementation (tests / runtimes)
 });
 
@@ -247,11 +247,13 @@ const client = new BlitzAPI({
 await client.enrichment.email({ person_linkedin_url: "…" }, { timeout: 5 });
 ```
 
-The client-side rate limiter is a token bucket: it admits at most `rate_limit_rps`
-requests per second so a single client instance stays under the API's limit (5 req/s
-by default; check your key's limit via
-`(await client.account.key_info()).max_requests_per_seconds`). Across multiple
-processes you may still hit `429` — the retry path handles that.
+The client-side rate limiter is a token bucket applied **per endpoint**, mirroring the API,
+whose limit is itself per endpoint (5 req/s on each endpoint independently by default — e.g.
+`enrichment.email` and `enrichment.phone` get separate budgets; check yours via
+`(await client.account.key_info()).max_requests_per_seconds`). Each endpoint gets its own
+bucket that admits at most `rate_limit_rps` requests per second, so a single client instance
+stays under the limit on every endpoint, and a burst on one never throttles another. Across
+multiple processes you may still hit `429` — the retry path handles that.
 
 ## Error handling
 

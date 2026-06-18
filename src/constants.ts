@@ -17,8 +17,9 @@ export const DEFAULT_TIMEOUT = 30;
 export const DEFAULT_MAX_RETRIES = 3;
 
 /**
- * Default client-side rate limit. The API allows 5 req/s on every plan; the
- * per-key value is discoverable via `client.account.key_info()`.
+ * Default client-side rate limit, applied **per endpoint** (one token bucket each),
+ * mirroring the API, which limits each endpoint to 5 req/s independently on every
+ * plan; your per-endpoint value is discoverable via `client.account.key_info()`.
  */
 export const DEFAULT_RATE_LIMIT_RPS = 5;
 

@@ -1,10 +1,10 @@
 /**
- * Client-side token-bucket rate limiter.
+ * Client-side token-bucket rate limiter — a single bucket.
  *
- * The API enforces a per-key request rate (5 req/s by default). This limiter
- * throttles outgoing requests *before* they are sent so a single client instance
- * stays under the limit proactively; the server-side 429 retry path is the
- * backstop for bursts across processes.
+ * The client instantiates one of these *per endpoint* (see `BlitzAPI`), so each
+ * endpoint is throttled independently and a burst on one never starves another.
+ * Each bucket throttles outgoing requests *before* they are sent; the server-side
+ * 429 retry path is the backstop for bursts across processes.
  *
  * The clock and sleep functions are injectable so tests can drive them with a
  * fake clock.

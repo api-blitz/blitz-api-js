@@ -11,7 +11,7 @@ import {
 } from "./base-client.js";
 import * as C from "./constants.js";
 import { APIConnectionError, APITimeoutError, BlitzError } from "./errors.js";
-import { defaultSleep, type NowFn, RateLimiter, type SleepFn } from "./rate-limit.js";
+import { defaultNow, defaultSleep, type NowFn, RateLimiter, type SleepFn } from "./rate-limit.js";
 import { AccountResource } from "./resources/account.js";
 import { EnrichmentResource } from "./resources/enrichment.js";
 import { SearchResource } from "./resources/search.js";
@@ -29,7 +29,10 @@ export interface BlitzAPIOptions {
   timeout?: number;
   /** Retries for transient failures (429/5xx/network). Defaults to 3. */
   max_retries?: number;
-  /** Client-side rate limit in req/s. Pass `null` to disable. Defaults to 5. */
+  /**
+   * Client-side rate limit in req/s, applied **per endpoint** (each endpoint path
+   * gets its own bucket of this size). Pass `null` to disable. Defaults to 5.
+   */
   rate_limit_rps?: number | null;
   /** Custom `fetch` implementation (e.g. for tests or a non-global runtime). */
   fetch?: FetchFn;
@@ -62,7 +65,10 @@ export class BlitzAPI {
   readonly #timeoutMs: number;
   readonly #fetch: FetchFn;
   readonly #sleep: SleepFn;
-  readonly #rateLimiter: RateLimiter;
+  readonly #now: NowFn;
+  readonly #rateLimitRps: number | null;
+  /** One token bucket per endpoint path, created on first use. */
+  readonly #rateLimiters = new Map<string, RateLimiter>();
 
   #account?: AccountResource;
   #search?: SearchResource;
@@ -82,9 +88,20 @@ export class BlitzAPI {
     this.#timeoutMs = (options.timeout ?? C.DEFAULT_TIMEOUT) * 1000;
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#sleep = options.sleep ?? defaultSleep;
-    const rps =
+    this.#now = options.now ?? defaultNow;
+    this.#rateLimitRps =
       options.rate_limit_rps === undefined ? C.DEFAULT_RATE_LIMIT_RPS : options.rate_limit_rps;
-    this.#rateLimiter = new RateLimiter(rps, { now: options.now, sleep: options.sleep });
+  }
+
+  /** The token bucket for `path`, created on first use. Each endpoint is throttled
+   * independently so a burst on one endpoint never starves another. */
+  #rateLimiterFor(path: string): RateLimiter {
+    let limiter = this.#rateLimiters.get(path);
+    if (limiter === undefined) {
+      limiter = new RateLimiter(this.#rateLimitRps, { now: this.#now, sleep: this.#sleep });
+      this.#rateLimiters.set(path, limiter);
+    }
+    return limiter;
   }
 
   /** @internal Shared request pipeline used by the resource namespaces. */
@@ -103,7 +120,7 @@ export class BlitzAPI {
 
     let attempt = 0;
     for (;;) {
-      await this.#rateLimiter.acquire();
+      await this.#rateLimiterFor(path).acquire();
 
       let response: Response;
       try {
