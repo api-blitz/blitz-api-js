@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/api-blitz/blitz-api-js/compare/v0.5.0...v1.0.0) (2026-06-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* utils.company_employment_distribution -> enrichment.company_distribution_by_country and utils.company_department_distribution -> enrichment.company_distribution_by_department; the CompanyEmploymentDistributionResponse / CompanyDepartmentDistributionResponse types are renamed CompanyDistributionByCountryResponse / CompanyDistributionByDepartmentResponse.
+
+### Features
+
+* align find-people, find-companies & distribution with Blitz API v2 ([5053ff6](https://github.com/api-blitz/blitz-api-js/commit/5053ff6ab208537fb4b7f20d13dd09f120dd5249))
+
 ## [0.5.0](https://github.com/api-blitz/blitz-api-js/compare/v0.4.0...v0.5.0) (2026-06-18)
 
 
