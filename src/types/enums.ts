@@ -630,3 +630,31 @@ export const JOB_LEVEL = [
 ] as const;
 export type JobLevel = (typeof JOB_LEVEL)[number];
 export const JobLevelSchema = z.enum(JOB_LEVEL);
+
+export const LAST_FUNDING_TYPE = [
+  "Series unknown",
+  "Pre seed",
+  "Seed",
+  "Series A",
+  "Series B",
+  "Series C",
+  "Series D",
+  "Series E-J",
+  "Grant",
+  "Angel",
+  "Private equity",
+  "Debt financing",
+  "Non equity assistance",
+  "Post IPO equity",
+  "Undisclosed",
+  "Post IPO debt",
+  "Product crowdfunding",
+  "Equity crowdfunding",
+  "Corporate round",
+  "Convertible note",
+  "Secondary market",
+  "Initial coin offering",
+  "Post IPO secondary",
+] as const;
+export type LastFundingType = (typeof LAST_FUNDING_TYPE)[number];
+export const LastFundingTypeSchema = z.enum(LAST_FUNDING_TYPE);

@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   APITimeoutError,
   BlitzAPI,
-  CompanyDepartmentDistributionResponse,
+  CompanyDistributionByCountryResponse,
+  CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
   CurrentDateResponse,
   EmailEnrichmentResponse,
@@ -105,11 +106,26 @@ describe("resources", () => {
       }),
     );
     const page = await client().search.companies({
-      company: { employee_range: ["1-10"] },
+      company: {
+        employee_range: ["1-10"],
+        total_funding: { min: 1000000 },
+        last_funding_type: { include: ["Series A"] },
+        lead_investors: { include: ["Sequoia Capital"] },
+        hq: { state: { include: ["California"] } },
+      },
       max_results: 1,
     });
     expect(page.data[0]?.name).toBe("Google");
-    expect(body).toEqual({ company: { employee_range: ["1-10"] }, max_results: 1 });
+    expect(body).toEqual({
+      company: {
+        employee_range: ["1-10"],
+        total_funding: { min: 1000000 },
+        last_funding_type: { include: ["Series A"] },
+        lead_investors: { include: ["Sequoia Capital"] },
+        hq: { state: { include: ["California"] } },
+      },
+      max_results: 1,
+    });
   });
 
   it("search.employee_finder sends value lists", async () => {
@@ -166,18 +182,34 @@ describe("resources", () => {
     expect(body).toEqual({ region: "America/New_York" });
   });
 
-  it("utils.company_department_distribution posts the company url and types the response", async () => {
+  it("enrichment.company_distribution_by_country posts the company url and types the response", async () => {
     let body: unknown;
     server.use(
-      http.post(`${BASE}/v2/utils/company-department-distribution`, async ({ request }) => {
+      http.post(`${BASE}/v2/enrichment/company-distribution-by-country`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.EMPLOYMENT_DISTRIBUTION);
+      }),
+    );
+    const result = await client().enrichment.company_distribution_by_country({
+      company_linkedin_url: "https://www.linkedin.com/company/openai",
+    });
+    expect(CompanyDistributionByCountryResponse.parse(result)).toBeTruthy();
+    expect(result.distribution[0]?.country).toBe("US");
+    expect(body).toEqual({ company_linkedin_url: "https://www.linkedin.com/company/openai" });
+  });
+
+  it("enrichment.company_distribution_by_department posts the company url and types the response", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/enrichment/company-distribution-by-department`, async ({ request }) => {
         body = await request.json();
         return HttpResponse.json(data.DEPARTMENT_DISTRIBUTION);
       }),
     );
-    const result = await client().utils.company_department_distribution({
+    const result = await client().enrichment.company_distribution_by_department({
       company_linkedin_url: "https://www.linkedin.com/company/openai",
     });
-    expect(CompanyDepartmentDistributionResponse.parse(result)).toBeTruthy();
+    expect(CompanyDistributionByDepartmentResponse.parse(result)).toBeTruthy();
     expect(result.distribution[0]?.department).toBe("Engineering");
     expect(body).toEqual({ company_linkedin_url: "https://www.linkedin.com/company/openai" });
   });

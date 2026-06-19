@@ -52,9 +52,9 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/enrichment/company` | `enrichment.company()` | `CompanyEnrichmentResponse` |
 | POST | `/v2/enrichment/domain-to-linkedin` | `enrichment.domain_to_linkedin()` | `DomainToLinkedinResponse` |
 | POST | `/v2/enrichment/linkedin-to-domain` | `enrichment.linkedin_to_domain()` | `LinkedinToDomainResponse` |
+| POST | `/v2/enrichment/company-distribution-by-country` | `enrichment.company_distribution_by_country()` | `CompanyDistributionByCountryResponse` |
+| POST | `/v2/enrichment/company-distribution-by-department` | `enrichment.company_distribution_by_department()` | `CompanyDistributionByDepartmentResponse` |
 | POST | `/v2/utils/current-date` | `utils.current_date()` | `CurrentDateResponse` |
-| POST | `/v2/utils/company-employment-distribution` | `utils.company_employment_distribution()` | `CompanyEmploymentDistributionResponse` |
-| POST | `/v2/utils/company-department-distribution` | `utils.company_department_distribution()` | `CompanyDepartmentDistributionResponse` |
 
 ### Re-deriving the API surface
 
@@ -147,7 +147,7 @@ src/
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
     shared.ts     Location, Experience, Education, Certification, Person, HQ, Company.
     enums.ts      GENERATED. Industry(534) + CompanyType/EmployeeRange/Continent/
-                  SalesRegion/JobFunction/JobLevel. Never hand-edit (see §7).
+                  SalesRegion/JobFunction/JobLevel/LastFundingType. Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
     account/search/enrichment/utils.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
@@ -244,13 +244,38 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-06-19** — Synced three endpoints to the live spec. **(1)** The company
+  search filter (`CompanyFilter`, shared by `search.people`/`search.companies`)
+  gained `total_funding`/`last_funding_amount`/`last_funding_year` (ranges),
+  `last_funding_type` (new `LastFundingTypeFilter` over the new generated
+  `LastFundingType` enum — added `last_funding_type` to `PROPERTY_TO_CLASS`), and
+  `lead_investors` (keywords); `CompanyHQFilter` gained `state`. Requests are
+  TS-only, so these are non-breaking pass-through fields. **(2)** The two employee
+  distribution endpoints **moved + were renamed** to follow the spec (now tagged
+  *Company Enrichment*): `utils.company_employment_distribution` →
+  `enrichment.company_distribution_by_country`
+  (`/v2/enrichment/company-distribution-by-country`) and
+  `utils.company_department_distribution` →
+  `enrichment.company_distribution_by_department`
+  (`/v2/enrichment/company-distribution-by-department`); response models moved to
+  `types/enrichment.ts` and were renamed (`Company{Employment,Department}Distribution`
+  → `CompanyDistributionBy{Country,Department}Response`). **Breaking** surface change.
+  PascalCase type names follow the **OpenAPI spec**, not the Python SDK: the field key
+  `last_funding_type` → `LastFundingType`, and the paths
+  `company-distribution-by-{country,department}` → `CompanyDistributionBy…Response`
+  (matching the method names). The spec defines no named types of its own
+  (`components.schemas` is empty, responses are example-only), and the merged Python
+  SDK chose identifiers that drift from the spec path/field (`FundingType`,
+  `CompanyCountryDistributionResponse`) — we intentionally do **not** mirror those.
+  The snake_case wire surface (methods, params, response keys) stays 1:1 with both the
+  API and Python.
 - **2026-06-03** — Enum generator now pulls from the live OpenAPI spec
   (`https://api.blitz-api.ai/openapi`) instead of a hand-vendored file.
   `scripts/gen-enums.ts --fetch` walks the spec, maps each inlined enum to a name
   by its owning request property (`PROPERTY_TO_CLASS`), collapses the 6–12
   byte-identical duplicate occurrences, de-dups exact-repeat values, and rewrites
   both the committed cache `openapi/enum-source.json` and `src/types/enums.ts`.
-  Verified byte-identical to the previous output for all 7 enums (incl. the
+  Verified byte-identical to the previous output for all enums (incl. the
   double-escaped `Women\\'s Handbag Manufacturing`). Kept the drift guard
   **offline** (only `--fetch` hits the network): CI's `pnpm gen:enums:check`
   re-renders from the committed cache and never depends on the network or breaks

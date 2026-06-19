@@ -9,6 +9,7 @@
     "Continent": ["Africa","Antarctica","Asia","Europe","North America","Oceania","South America"],
     "SalesRegion": ["NORAM","LATAM","EMEA","APAC"],
     "JobFunction": ["Advertising & Marketing","Art, Culture and Creative Professionals","Construction","Customer/Client Service","Education","Engineering","Finance & Accounting","General Business & Management","Healthcare & Human Services","Human Resources","Information Technology","Legal","Manufacturing & Production","Operations","Other","Public Administration & Safety","Purchasing","Research & Development","Sales & Business Development","Science","Supply Chain & Logistics","Writing/Editing"],
-    "JobLevel": ["C-Team","Director","Manager","Other","Staff","VP"]
+    "JobLevel": ["C-Team","Director","Manager","Other","Staff","VP"],
+    "LastFundingType": ["Series unknown","Pre seed","Seed","Series A","Series B","Series C","Series D","Series E-J","Grant","Angel","Private equity","Debt financing","Non equity assistance","Post IPO equity","Undisclosed","Post IPO debt","Product crowdfunding","Equity crowdfunding","Corporate round","Convertible note","Secondary market","Initial coin offering","Post IPO secondary"]
   }
 }

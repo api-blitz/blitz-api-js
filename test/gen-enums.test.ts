@@ -17,6 +17,7 @@ const CONTINENT = ["Africa", "Asia"];
 const SALES_REGION = ["NORAM", "EMEA"];
 const JOB_FUNCTION = ["Engineering", "Finance & Accounting"];
 const JOB_LEVEL = ["C-Team", "Director"];
+const LAST_FUNDING_TYPE = ["Series A", "Seed"];
 
 const DEFAULTS = {
   industry: INDUSTRY,
@@ -26,6 +27,7 @@ const DEFAULTS = {
   sales_region: SALES_REGION,
   job_function: JOB_FUNCTION,
   job_level: JOB_LEVEL,
+  last_funding_type: LAST_FUNDING_TYPE,
 };
 
 /** `{ include: {items.enum}, exclude: {items.enum} }` — the industry/type shape. */
@@ -68,6 +70,7 @@ function companyBlock(v: typeof DEFAULTS) {
       industry: filterProp(v.industry),
       type: filterProp(v.type),
       employee_range: arrayEnumProp(v.employee_range),
+      last_funding_type: filterProp(v.last_funding_type),
       hq: objSchema({
         continent: arrayEnumProp(v.continent),
         sales_region: arrayEnumProp(v.sales_region),
@@ -77,7 +80,7 @@ function companyBlock(v: typeof DEFAULTS) {
 }
 
 /**
- * A complete spec mirroring the real one: all 7 enums, each repeated across two
+ * A complete spec mirroring the real one: all 8 enums, each repeated across two
  * content-types (json + multipart) and, for industry/type, include + exclude,
  * plus continent/sales_region under both companies.hq and employee-finder.
  * Every occurrence is identical, so it round-trips cleanly.
@@ -102,7 +105,7 @@ function fullSpec(overrides: Partial<typeof DEFAULTS> = {}) {
 }
 
 describe("extractEnums", () => {
-  it("maps all 7 owning properties to class names, in canonical order", () => {
+  it("maps all 8 owning properties to class names, in canonical order", () => {
     const enums = extractEnums(fullSpec());
     expect(Object.keys(enums)).toEqual([
       "Industry",
@@ -112,6 +115,7 @@ describe("extractEnums", () => {
       "SalesRegion",
       "JobFunction",
       "JobLevel",
+      "LastFundingType",
     ]);
     expect(enums).toEqual({
       Industry: INDUSTRY,
@@ -121,6 +125,7 @@ describe("extractEnums", () => {
       SalesRegion: SALES_REGION,
       JobFunction: JOB_FUNCTION,
       JobLevel: JOB_LEVEL,
+      LastFundingType: LAST_FUNDING_TYPE,
     });
   });
 
@@ -179,7 +184,7 @@ describe("extractEnums", () => {
     try {
       const enums = extractEnums(spec);
       expect(enums).not.toHaveProperty("Seniority");
-      expect(Object.keys(enums)).toHaveLength(7);
+      expect(Object.keys(enums)).toHaveLength(8);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("seniority"));
     } finally {
       warn.mockRestore();

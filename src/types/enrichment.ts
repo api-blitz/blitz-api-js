@@ -62,3 +62,39 @@ export const LinkedinToDomainResponse = blitzObject({
   email_domain: z.string().nullish(),
 });
 export type LinkedinToDomainResponse = z.infer<typeof LinkedinToDomainResponse>;
+
+/** Employee count for a single country (ISO 3166-1 alpha-2; `unknown` when undetermined). */
+export const CountryDistributionItem = blitzObject({
+  country: z.string().nullish(),
+  count: z.number().nullish(),
+  percentage_ratio: z.number().nullish(),
+});
+export type CountryDistributionItem = z.infer<typeof CountryDistributionItem>;
+
+/** Result of `enrichment.company_distribution_by_country`. */
+export const CompanyDistributionByCountryResponse = blitzObject({
+  company_linkedin_url: z.string().nullish(),
+  total_employees: z.number().nullish(),
+  distribution: blitzList(CountryDistributionItem),
+});
+export type CompanyDistributionByCountryResponse = z.infer<
+  typeof CompanyDistributionByCountryResponse
+>;
+
+/** Employee count for a single department (`Other` when unclassified). */
+export const DepartmentDistributionItem = blitzObject({
+  department: z.string().nullish(),
+  count: z.number().nullish(),
+  percentage_ratio: z.number().nullish(),
+});
+export type DepartmentDistributionItem = z.infer<typeof DepartmentDistributionItem>;
+
+/** Result of `enrichment.company_distribution_by_department`. */
+export const CompanyDistributionByDepartmentResponse = blitzObject({
+  company_linkedin_url: z.string().nullish(),
+  total_employees: z.number().nullish(),
+  distribution: blitzList(DepartmentDistributionItem),
+});
+export type CompanyDistributionByDepartmentResponse = z.infer<
+  typeof CompanyDistributionByDepartmentResponse
+>;

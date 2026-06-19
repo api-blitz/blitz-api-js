@@ -60,6 +60,7 @@ const PROPERTY_TO_CLASS: Record<string, string> = {
   sales_region: "SalesRegion",
   job_function: "JobFunction",
   job_level: "JobLevel",
+  last_funding_type: "LastFundingType",
 };
 
 /** OpenAPI/JSON-Schema keywords skipped when resolving an enum's owning property. */

@@ -1,7 +1,7 @@
 /** Response models for the Utilities resource. */
 
 import * as z from "zod";
-import { blitzList, blitzObject } from "./models.js";
+import { blitzObject } from "./models.js";
 
 /** Result of `utils.current_date`. */
 export const CurrentDateResponse = blitzObject({
@@ -11,37 +11,3 @@ export const CurrentDateResponse = blitzObject({
   timezone_name: z.string().nullish(),
 });
 export type CurrentDateResponse = z.infer<typeof CurrentDateResponse>;
-
-/** Employee count for a single country. */
-export const EmploymentDistributionItem = blitzObject({
-  country: z.string().nullish(),
-  count: z.number().nullish(),
-});
-export type EmploymentDistributionItem = z.infer<typeof EmploymentDistributionItem>;
-
-/** Result of `utils.company_employment_distribution`. */
-export const CompanyEmploymentDistributionResponse = blitzObject({
-  company_linkedin_url: z.string().nullish(),
-  total_employees: z.number().nullish(),
-  distribution: blitzList(EmploymentDistributionItem),
-});
-export type CompanyEmploymentDistributionResponse = z.infer<
-  typeof CompanyEmploymentDistributionResponse
->;
-
-/** Employee count for a single department. */
-export const DepartmentDistributionItem = blitzObject({
-  department: z.string().nullish(),
-  count: z.number().nullish(),
-});
-export type DepartmentDistributionItem = z.infer<typeof DepartmentDistributionItem>;
-
-/** Result of `utils.company_department_distribution`. */
-export const CompanyDepartmentDistributionResponse = blitzObject({
-  company_linkedin_url: z.string().nullish(),
-  total_employees: z.number().nullish(),
-  distribution: blitzList(DepartmentDistributionItem),
-});
-export type CompanyDepartmentDistributionResponse = z.infer<
-  typeof CompanyDepartmentDistributionResponse
->;
