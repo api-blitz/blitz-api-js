@@ -2,6 +2,8 @@
 
 import type { BlitzAPI } from "../client.js";
 import {
+  CompanyDistributionByCountryResponse,
+  CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
   DomainToLinkedinResponse,
   EmailEnrichmentResponse,
@@ -26,6 +28,8 @@ const PHONE_TO_PERSON = "/v2/enrichment/phone-to-person";
 const COMPANY = "/v2/enrichment/company";
 const DOMAIN_TO_LINKEDIN = "/v2/enrichment/domain-to-linkedin";
 const LINKEDIN_TO_DOMAIN = "/v2/enrichment/linkedin-to-domain";
+const COMPANY_DISTRIBUTION_BY_COUNTRY = "/v2/enrichment/company-distribution-by-country";
+const COMPANY_DISTRIBUTION_BY_DEPARTMENT = "/v2/enrichment/company-distribution-by-department";
 
 export class EnrichmentResource {
   constructor(private readonly client: BlitzAPI) {}
@@ -94,6 +98,34 @@ export class EnrichmentResource {
       LINKEDIN_TO_DOMAIN,
       params,
       LinkedinToDomainResponse,
+      options,
+    );
+  }
+
+  /** Get a company's employee count broken down by country ("unknown" when undetermined). */
+  company_distribution_by_country(
+    params: CompanyLinkedinUrlParams,
+    options?: RequestOptions,
+  ): Promise<CompanyDistributionByCountryResponse> {
+    return this.client.request(
+      "POST",
+      COMPANY_DISTRIBUTION_BY_COUNTRY,
+      params,
+      CompanyDistributionByCountryResponse,
+      options,
+    );
+  }
+
+  /** Get a company's employee count broken down by department ("Other" when unclassified). */
+  company_distribution_by_department(
+    params: CompanyLinkedinUrlParams,
+    options?: RequestOptions,
+  ): Promise<CompanyDistributionByDepartmentResponse> {
+    return this.client.request(
+      "POST",
+      COMPANY_DISTRIBUTION_BY_DEPARTMENT,
+      params,
+      CompanyDistributionByDepartmentResponse,
       options,
     );
   }

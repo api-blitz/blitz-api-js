@@ -149,8 +149,8 @@ export const EMPLOYMENT_DISTRIBUTION = {
   company_linkedin_url: "https://www.linkedin.com/company/openai",
   total_employees: 1234,
   distribution: [
-    { country: "US", count: 900 },
-    { country: "unknown", count: 54 },
+    { country: "US", count: 900, percentage_ratio: 72.93 },
+    { country: "unknown", count: 54, percentage_ratio: 4.38 },
   ],
 };
 
@@ -158,7 +158,7 @@ export const DEPARTMENT_DISTRIBUTION = {
   company_linkedin_url: "https://www.linkedin.com/company/openai",
   total_employees: 1234,
   distribution: [
-    { department: "Engineering", count: 320 },
-    { department: "Other", count: 54 },
+    { department: "Engineering", count: 320, percentage_ratio: 25.93 },
+    { department: "Other", count: 54, percentage_ratio: 4.38 },
   ],
 };

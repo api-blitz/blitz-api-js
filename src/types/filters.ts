@@ -14,6 +14,7 @@ import type {
   Industry,
   JobFunction,
   JobLevel,
+  LastFundingType,
   SalesRegion,
 } from "./enums.js";
 
@@ -25,6 +26,7 @@ export type ContinentValue = Continent | (string & {});
 export type SalesRegionValue = SalesRegion | (string & {});
 export type JobFunctionValue = JobFunction | (string & {});
 export type JobLevelValue = JobLevel | (string & {});
+export type LastFundingTypeValue = LastFundingType | (string & {});
 
 /** Free-text include/exclude keyword filter. */
 export interface KeywordFilter {
@@ -44,6 +46,12 @@ export interface CompanyTypeFilter {
   exclude?: CompanyTypeValue[];
 }
 
+/** Include/exclude filter over the last-funding-round types. */
+export interface LastFundingTypeFilter {
+  include?: LastFundingTypeValue[];
+  exclude?: LastFundingTypeValue[];
+}
+
 /** Numeric range filter. `0` means unset for most fields. */
 export interface RangeFilter {
   min?: number;
@@ -53,6 +61,7 @@ export interface RangeFilter {
 /** Headquarters-location filter for company search. */
 export interface CompanyHQFilter {
   city?: KeywordFilter;
+  state?: KeywordFilter;
   country_code?: string[];
   continent?: ContinentValue[];
   sales_region?: SalesRegionValue[];
@@ -72,6 +81,11 @@ export interface CompanyFilter {
   sic_code?: KeywordFilter;
   web_traffic?: RangeFilter;
   ad_spend?: RangeFilter;
+  total_funding?: RangeFilter;
+  last_funding_amount?: RangeFilter;
+  last_funding_year?: RangeFilter;
+  last_funding_type?: LastFundingTypeFilter;
+  lead_investors?: KeywordFilter;
   keywords?: KeywordFilter;
   founded_year?: RangeFilter;
   hq?: CompanyHQFilter;
@@ -173,8 +187,8 @@ export interface PersonLinkedinUrlParams {
 
 /**
  * Params for `enrichment.company`, `enrichment.linkedin_to_domain`,
- * `utils.company_employment_distribution`, and
- * `utils.company_department_distribution`.
+ * `enrichment.company_distribution_by_country`, and
+ * `enrichment.company_distribution_by_department`.
  */
 export interface CompanyLinkedinUrlParams {
   company_linkedin_url: string;

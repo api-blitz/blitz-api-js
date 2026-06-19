@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  CompanyDepartmentDistributionResponse,
-  CompanyEmploymentDistributionResponse,
+  CompanyDistributionByCountryResponse,
+  CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
   CompanySearchResponse,
   CurrentDateResponse,
@@ -109,18 +109,20 @@ describe("response models", () => {
     expect(resp.timezone).toBe("America/New_York");
   });
 
-  it("parses employment distribution", () => {
-    const resp = CompanyEmploymentDistributionResponse.parse(data.EMPLOYMENT_DISTRIBUTION);
+  it("parses distribution by country", () => {
+    const resp = CompanyDistributionByCountryResponse.parse(data.EMPLOYMENT_DISTRIBUTION);
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.country).toBe("US");
     expect(resp.distribution[0]?.count).toBe(900);
+    expect(resp.distribution[0]?.percentage_ratio).toBe(72.93);
   });
 
-  it("parses department distribution", () => {
-    const resp = CompanyDepartmentDistributionResponse.parse(data.DEPARTMENT_DISTRIBUTION);
+  it("parses distribution by department", () => {
+    const resp = CompanyDistributionByDepartmentResponse.parse(data.DEPARTMENT_DISTRIBUTION);
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.department).toBe("Engineering");
     expect(resp.distribution[0]?.count).toBe(320);
+    expect(resp.distribution[0]?.percentage_ratio).toBe(25.93);
   });
 
   it("coerces null list fields to [] (top-level and nested)", () => {
