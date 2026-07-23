@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/api-blitz/blitz-api-js/compare/v1.0.0...v1.1.0) (2026-07-23)
+
+
+### Features
+
+* add Jobs resource and enhance pagination for job search ([97ed394](https://github.com/api-blitz/blitz-api-js/commit/97ed39457e9434653264aa8e6fa683b75fe58b5e))
+
 ## [1.0.0](https://github.com/api-blitz/blitz-api-js/compare/v0.5.0...v1.0.0) (2026-06-19)
 
 
