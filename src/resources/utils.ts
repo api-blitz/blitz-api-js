@@ -10,7 +10,10 @@ export class UtilsResource {
   constructor(private readonly client: BlitzAPI) {}
 
   /** Get the current server date/time for an IANA timezone (e.g. `America/New_York`). */
-  current_date(params: CurrentDateParams, options?: RequestOptions): Promise<CurrentDateResponse> {
+  current_date(
+    params: CurrentDateParams = {},
+    options?: RequestOptions,
+  ): Promise<CurrentDateResponse> {
     return this.client.request("POST", CURRENT_DATE, params, CurrentDateResponse, options);
   }
 }

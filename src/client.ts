@@ -14,6 +14,7 @@ import { APIConnectionError, APITimeoutError, BlitzError } from "./errors.js";
 import { defaultNow, defaultSleep, type NowFn, RateLimiter, type SleepFn } from "./rate-limit.js";
 import { AccountResource } from "./resources/account.js";
 import { EnrichmentResource } from "./resources/enrichment.js";
+import { JobsResource } from "./resources/jobs.js";
 import { SearchResource } from "./resources/search.js";
 import { UtilsResource } from "./resources/utils.js";
 import type { RequestOptions } from "./types/filters.js";
@@ -72,6 +73,7 @@ export class BlitzAPI {
 
   #account?: AccountResource;
   #search?: SearchResource;
+  #jobs?: JobsResource;
   #enrichment?: EnrichmentResource;
   #utils?: UtilsResource;
 
@@ -181,6 +183,12 @@ export class BlitzAPI {
   get search(): SearchResource {
     this.#search ??= new SearchResource(this);
     return this.#search;
+  }
+
+  /** Jobs: search live postings across companies, or at a single company. */
+  get jobs(): JobsResource {
+    this.#jobs ??= new JobsResource(this);
+    return this.#jobs;
   }
 
   /** Enrichment: email, phone, and reverse lookups. */

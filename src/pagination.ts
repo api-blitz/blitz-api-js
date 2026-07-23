@@ -1,13 +1,14 @@
 /**
- * Auto-pagination for the search endpoints.
+ * Auto-pagination for the search and jobs endpoints.
  *
- * The paginated `search.*` methods return a {@link PagePromise}: `await` it for the
- * first {@link Page}, or `for await (… of …)` it to stream every item across all
- * pages (each page fetched on demand, through the client's rate limiter).
+ * The paginated methods return a {@link PagePromise}: `await` it for the first
+ * {@link Page}, or `for await (… of …)` it to stream every item across all pages
+ * (each page fetched on demand, through the client's rate limiter).
  *
  * Blitz uses two pagination styles, mirrored here:
- * - **cursor** (`search.people`, `search.companies`): pass the response `cursor`
- *   back; stop when the API returns `cursor: null`. → {@link CursorPage}
+ * - **cursor** (`search.people`, `search.companies`, `jobs.search`, `jobs.company`):
+ *   pass the response `cursor` back; stop when the API returns `cursor: null`.
+ *   → {@link CursorPage}
  * - **page** (`search.employee_finder`): increment `page` until it exceeds
  *   `total_pages`. → {@link OffsetPage}
  */
@@ -156,7 +157,7 @@ async function* take<T>(source: AsyncIterable<T>, n: number | undefined): AsyncG
 }
 
 /**
- * The return type of the paginated `search.*` methods.
+ * The return type of the paginated `search.*` and `jobs.*` methods.
  *
  * Awaitable to the first {@link Page}, and directly async-iterable over every item
  * across all pages:
@@ -223,7 +224,8 @@ export class PagePromise<TItem, TResponse>
  *
  * The resource method supplies `fetch_page` (which sends the request for a given
  * cursor) plus the accessors that pull the items and the next cursor out of a
- * response; both `search.people` and `search.companies` share this one path.
+ * response; `search.people`, `search.companies`, `jobs.search` and `jobs.company`
+ * all share this one path.
  */
 export function make_cursor_page_promise<TItem, TResponse>(
   initial_cursor: string | undefined,

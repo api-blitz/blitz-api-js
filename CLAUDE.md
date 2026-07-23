@@ -15,7 +15,8 @@ changes — it records the design decisions so you don't re-derive them.
   `/openapi/api-reference/v2.openapi.json`).
 - **Async-only.** One `BlitzAPI` class; methods return a `Promise` (or a `PagePromise`
   for the paginated lists). Uses the global `fetch` (overridable via the `fetch` option).
-- **Pagination** (`src/pagination.ts`): `search.people`/`companies` (cursor) and
+- **Pagination** (`src/pagination.ts`): `search.people`/`companies` and
+  `jobs.search`/`company` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` — `await` for the first `Page`
   (`.data` items, `.response` raw 1:1 body, `has_next_page()`/`get_next_page()`/`iter_pages()`),
   or `for await` to stream all items. Cursor stops on `cursor === null` (and throws on a

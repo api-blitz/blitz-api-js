@@ -35,7 +35,15 @@ const PERSON = {
       job_location: { city: "Sunnyvale", state_code: "CA", country_code: "US" },
     },
   ],
-  education: [{ degree: "Bachelor's degree", start_date: "2019-01-01", end_date: "2023-01-01" }],
+  education: [
+    {
+      school_name: "Stanford University",
+      degree: "Bachelor's degree",
+      field_of_study: "Computer Science",
+      start_date: "2019-01-01",
+      end_date: "2023-01-01",
+    },
+  ],
   skills: ["python"],
   certifications: [
     { authority: "Google", name: "Cloud Cybersecurity", url: "https://example.com/badge" },
@@ -94,6 +102,33 @@ export const COMPANY_SEARCH = {
   cursor: "eyJpIjoiY2E5OTcxZjU",
 };
 
+const JOB = {
+  date_posted: "2026-07-08 23:00:07+02",
+  title: "Growth Marketing Manager, SMB Ads",
+  url: "https://www.linkedin.com/jobs/view/growth-marketing-manager-smb-ads-at-openai-4437309737",
+  company_name: "OpenAI",
+  company_linkedin_url: "https://www.linkedin.com/company/openai",
+  ai_summary:
+    "The Growth Marketing Manager will execute growth experiments across acquisition, activation, lifecycle, and early retention for small business advertisers.",
+  location: { city: "San Francisco", country_code: "US" },
+};
+
+export const JOB_SEARCH = {
+  total_results: 4821,
+  results: [JOB],
+  results_length: 1,
+  max_results: 1,
+  cursor: "eyJzIjpbMTc1MjAxNzIwNzAwMF19",
+};
+
+export const COMPANY_JOBS = {
+  total_results: 37,
+  results: [JOB],
+  results_length: 1,
+  max_results: 1,
+  cursor: "eyJzIjpbMTc1MjAxNzIwNzAwMV19",
+};
+
 export const EMPLOYEE_FINDER = {
   company_linkedin_url: "https://www.linkedin.com/company/openai",
   max_results: 1,
@@ -134,6 +169,23 @@ export const COMPANY_ENRICHMENT = { found: true, company: COMPANY };
 export const DOMAIN_TO_LINKEDIN = {
   found: true,
   company_linkedin_url: "https://www.linkedin.com/company/blitz-api",
+  company_name: "Blitz",
+  other: [
+    {
+      company_linkedin_url: "https://www.linkedin.com/company/blitz-other",
+      company_name: "Blitz Other",
+    },
+  ],
+};
+
+/** An unlimited-plan key: credit fields come back as the literal `"unlimited"`. */
+export const KEY_INFO_UNLIMITED = {
+  valid: true,
+  id: "key_unlimited",
+  remaining_credits: "unlimited",
+  max_requests_per_seconds: "unlimited",
+  allowed_apis: ["/search/people"],
+  active_plans: [{ name: "Unlimited", status: "active" }],
 };
 
 export const LINKEDIN_TO_DOMAIN = { found: true, email_domain: "blitz-agency.com" };

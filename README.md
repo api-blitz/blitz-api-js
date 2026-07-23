@@ -161,12 +161,13 @@ always call the API from your backend.
 
 ## Endpoints
 
-All methods are grouped into four namespaces:
+All methods are grouped into five namespaces:
 
 | Namespace | Methods |
 | --- | --- |
 | `client.account` | `key_info()` |
 | `client.search` | `people()`, `companies()`, `employee_finder()`, `waterfall_icp()` |
+| `client.jobs` | `search()`, `company()` |
 | `client.enrichment` | `email()`, `phone()`, `email_to_person()`, `phone_to_person()`, `company()`, `domain_to_linkedin()`, `linkedin_to_domain()`, `company_distribution_by_country()`, `company_distribution_by_department()` |
 | `client.utils` | `current_date()` |
 
@@ -181,23 +182,25 @@ import { INDUSTRY } from "blitz-api-js"; // the full value array (534 industries
 import type { CompanyFilter, Industry } from "blitz-api-js";
 ```
 
-The three search list methods — `people`, `companies`, `employee_finder` — return a
-paginated `PagePromise` instead of a plain response (see [Pagination](#pagination)).
-`waterfall_icp` and the `enrichment`/`utils`/`account` methods return their response
-directly.
+The five list methods — `search.people`, `search.companies`, `search.employee_finder`,
+`jobs.search`, `jobs.company` — return a paginated `PagePromise` instead of a plain
+response (see [Pagination](#pagination)). `waterfall_icp` and the
+`enrichment`/`utils`/`account` methods return their response directly.
 
 ## Pagination
 
-`search.people` and `search.companies` are **cursor**-paginated; `search.employee_finder`
-is **page**-paginated. Each returns a `PagePromise` you can either `await` for the first
-page or `for await` to stream every item across all pages — each page is fetched on
-demand, through the client's rate limiter.
+`search.people`, `search.companies`, `jobs.search` and `jobs.company` are
+**cursor**-paginated; `search.employee_finder` is **page**-paginated. Each returns a
+`PagePromise` you can either `await` for the first page or `for await` to stream every
+item across all pages — each page is fetched on demand, through the client's rate
+limiter.
 
 > **`max_results` is the page size, not a total.** It's "results per page" (1–50), and
 > the API **bills 1 credit per result returned**. A bare `for await` streams *every*
 > match up to the server-side limit (people: 50k results / 1k pages; employee finder:
-> 10k), which can be a lot of credits. To bound it, pass **`max_items`** (a client-side
-> total cap — never sent on the wire), `break` out of the loop, or drive pages manually.
+> 10k; jobs: 5k), which can be a lot of credits. To bound it, pass **`max_items`** (a
+> client-side total cap — never sent on the wire), `break` out of the loop, or drive
+> pages manually.
 
 ```ts
 // Stream up to max_items results across pages, then stop fetching:
@@ -220,6 +223,16 @@ if (page.has_next_page()) {
 const first = await client.search.employee_finder({ company_linkedin_url: "…", max_results: 50 });
 for await (const p of first.iter_pages()) {
   console.log(`page ${p.response.page}/${p.response.total_pages} — ${p.data.length} items`);
+}
+
+// Jobs are cursor-paginated too — surface hiring signals matching your ICP:
+for await (const job of client.jobs.search({
+  job: { title: { include: ["Head of Sales"] }, date_posted: { last_days: 30 } },
+  company: { industry: { include: ["Software Development"] }, size: { include: ["51-200"] } },
+  max_results: 50,
+  max_items: 200,
+})) {
+  console.log(job.company_name, job.title, job.location?.city);
 }
 ```
 

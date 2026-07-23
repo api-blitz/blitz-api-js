@@ -13,7 +13,9 @@
 The official **typed TypeScript SDK for the Blitz API** (https://blitz-api.ai), a
 B2B data / GTM REST API (people & company search, contact enrichment, utilities).
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
-behaves the same way over the same 14 endpoints.
+behaves the same way over all 17 endpoints. `blitz-api-py` covers the same
+surface, jobs included — keep the two at parity, and cross-check the sibling SDK
+when changing any endpoint.
 
 Two design mandates:
 
@@ -36,7 +38,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 - **Status conventions**: 401 invalid/missing key · 402 insufficient credits ·
   404 not found · 429 rate limited (wait 60s then retry) · 5xx server error.
 
-### Endpoint → method → response model (all 14)
+### Endpoint → method → response model (all 17)
 
 | HTTP | Path | SDK method | Response model |
 | --- | --- | --- | --- |
@@ -45,6 +47,8 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/search/employee-finder` | `search.employee_finder()` | `EmployeeFinderResponse` |
 | POST | `/v2/search/people` | `search.people()` | `PeopleSearchResponse` |
 | POST | `/v2/search/companies` | `search.companies()` | `CompanySearchResponse` |
+| POST | `/v2/jobs/search` | `jobs.search()` | `JobSearchResponse` |
+| POST | `/v2/jobs/company` | `jobs.company()` | `CompanyJobsResponse` |
 | POST | `/v2/enrichment/email` | `enrichment.email()` | `EmailEnrichmentResponse` |
 | POST | `/v2/enrichment/phone` | `enrichment.phone()` | `PhoneEnrichmentResponse` |
 | POST | `/v2/enrichment/email-to-person` | `enrichment.email_to_person()` | `EmailToPersonResponse` |
@@ -97,9 +101,11 @@ deserialization between SDK releases.
   response includes top-level `company_linkedin_url`, `max_results`, and
   `results_length` (its old spec example was `null`, so the Python model omits
   them). The TS `WaterfallIcpResponse` includes them.
-- **Pagination**: `search.people`/`companies` (cursor) and `search.employee_finder`
-  (page) return a `PagePromise` (`src/pagination.ts`), Stainless/OpenAI-style but
-  snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates these three
+- **Pagination**: `search.people`/`companies` and `jobs.search`/`company` (cursor) and
+  `search.employee_finder` (page) return a `PagePromise` (`src/pagination.ts`),
+  Stainless/OpenAI-style but
+  snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates the same
+  cursor/page methods, jobs included
   (`AsyncCursorPage`/`AsyncPageNumberPage`, `auto_paging_iter`/`iter_pages`); the public
   surfaces intentionally diverge — TS uses `.data` + `for await` + `.collect()` and a
   non-advancing-cursor guard (which Python lacks), where Python uses `.results` +
@@ -107,15 +113,15 @@ deserialization between SDK releases.
   `await` it for the first `Page` (`.data`
   items + `.response` raw 1:1 body + `has_next_page()`/`get_next_page()`/`iter_pages()`),
   or `for await` it to stream every item across pages (each page fetched on demand,
-  through the rate limiter). This changed those three methods' return type from
-  `Promise<Response>` to `PagePromise`. Cursor endpoints stop on `cursor === null`
+  through the rate limiter). This changed those three `search.*` methods' return type
+  from `Promise<Response>` to `PagePromise`. Cursor endpoints stop on `cursor === null`
   and **throw** on a non-advancing cursor (the API returning the same cursor it was
   given) so a stuck stream aborts instead of looping forever; offset stops at
   `page >= total_pages`. `waterfall_icp` is not paginated. The cursor/offset wiring
   lives in two factories (`make_cursor_page_promise`/`make_offset_page_promise`) so
-  `people`/`companies` share one path and the guard lives in one place.
+  all four cursor methods share one path and the guard lives in one place.
   - **`max_results` is page size, not a total** (the API bills 1 credit per result
-    returned), so `for await` streams every match up to the server limit. The three
+    returned), so `for await` streams every match up to the server limit. The five
     paginated methods therefore accept a client-side **`max_items`** total cap that
     bounds `for await`/`collect()` and stops fetching once reached. `max_items` is
     destructured off in the resource method and **never sent on the wire** (it's not
@@ -140,16 +146,18 @@ src/
                   retry_delay, make_status_error, parse_json_body, parse_model.
                   STATUS_ERRORS maps code->class.
   client.ts       BlitzAPI: the fetch retry loop, options ctor, lazy memoized resource getters.
-  pagination.ts   Page/CursorPage/OffsetPage/PagePromise: auto-pagination for the search.* lists.
-  resources/      One module per OpenAPI tag group (account/search/enrichment/utils).
+  pagination.ts   Page/CursorPage/OffsetPage/PagePromise: auto-pagination for the
+                  search.* and jobs.* lists.
+  resources/      One module per OpenAPI tag group (account/search/jobs/enrichment/utils).
   types/
     models.ts     blitzObject = (shape) => z.looseObject(shape);
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
     shared.ts     Location, Experience, Education, Certification, Person, HQ, Company.
     enums.ts      GENERATED. Industry(534) + CompanyType/EmployeeRange/Continent/
-                  SalesRegion/JobFunction/JobLevel/LastFundingType. Never hand-edit (see §7).
+                  SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
+                  EmploymentType/WorkArrangement. Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
-    account/search/enrichment/utils.ts  Response schemas + inferred types per group.
+    account/search/jobs/enrichment/utils.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
 scripts/gen-enums.ts        --fetch pulls the live spec, de-dups, rewrites the cache + enums.ts;
                             default/--check render from the cache offline (CI drift guard).
@@ -197,7 +205,13 @@ Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
   byte-for-byte. The generator emits each value via `JSON.stringify` so escaping
   round-trips exactly.
 - **`Company.linkedin_id` is a number**; `Person`/`Experience` linkedin ids are strings.
-- **`Location`** is reused for `Person.location` and `Experience.job_location`.
+- **`Location`** is reused for `Person.location`, `Experience.job_location`, and
+  `Job.location`. The jobs payload populates only `city`/`country_code`; because every
+  field is `.nullish()` on a `blitzObject`, the superset parses it unchanged rather than
+  needing a narrower per-endpoint duplicate.
+- **`Job.date_posted` stays a string.** The API emits a non-ISO-8601 timestamp
+  (`"2026-07-08 23:00:07+02"` — space separator, offset, no `T`), so it is never
+  coerced to a `Date`.
 - **`HQ.postcode`/`street`** are only returned by company enrichment; **`Experience.company_name`**
   only by people search. All optional on one superset model.
 - **List fields use `blitzList(item)`** (`src/types/models.ts`), which coerces a
@@ -244,6 +258,47 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-07-23** — Closed server-parity gaps found by auditing `blitz-api` (server = source of
+  truth, cross-checked against the live spec) field-by-field. **(1)** `KeyInfo.remaining_credits`
+  and `max_requests_per_seconds` widened to `number | "unlimited"` — the API returns the literal
+  `"unlimited"` on unlimited plans, which a `number`-only schema **rejected** (`APIResponseValidationError`).
+  **(2)** `Education.school` → **`school_name`** and added `field_of_study`: the server always emits
+  `school_name`, so the old typed `school` field never populated (the real value survived only as an
+  untyped passthrough key). Not a real break — the renamed field was always empty. Guarded by a
+  schema-shape assertion since `blitzObject` would otherwise preserve the raw key. This is a shared
+  `Location`/`Education`-style superset model, so every Person-returning endpoint benefits.
+  **(3)** `DomainToLinkedinResponse` gained `company_name` + `other[]` (new `DomainToLinkedinMatch`).
+  **(4)** Request-side additions: `PeopleFilter.linkedin_url` and `WaterfallIcpParams.profile_min_connections`
+  (both in the spec, previously unexpressible via the typed surface). **(5)** `CascadeTier.location`
+  and `include_headline_search` made optional (spec requires only `include_title`); `current_date`'s
+  `region` made optional (spec has a default). All mirrored 1:1 in `blitz-api-py`. `CompanyFilter.linkedin_url`
+  is a documented superset field (applies on `search.people` only; `search.companies` ignores it).
+
+- **2026-07-22** — Added the Job Search endpoints and realigned the people location
+  filter. **(1)** New `client.jobs` namespace (its own OpenAPI tag, so its own module
+  per the one-module-per-tag rule) with `jobs.search()` → `POST /v2/jobs/search` and
+  `jobs.company()` → `POST /v2/jobs/company`. Both are cursor-paginated through the
+  existing `make_cursor_page_promise`, so they inherit the null-cursor stop and the
+  non-advancing-cursor guard for free; server-side cap is 5,000 jobs per query, 50 per
+  page. `jobs.company()` takes no default `= {}` because `company_linkedin_url` is
+  required (the API 422s without it) — it follows the `search.employee_finder`
+  precedent, not the `search.companies` one. Response models live in `types/jobs.ts`
+  and reuse the shared `Location`. **(2)** Three enums added to `PROPERTY_TO_CLASS`:
+  `seniority`→`Seniority`, `employment_type`→`EmploymentType`,
+  `work_arrangement`→`WorkArrangement`. `company.size` maps onto the **existing**
+  `EmployeeRange` class rather than getting its own: the value lists are byte-identical,
+  and two properties sharing one class name collapses to a single output key (verified —
+  the regeneration is a pure append). If upstream ever forks them, the generator's
+  divergence check throws and names both spec paths, which is the intended human
+  decision point. `job.field` is deliberately left unmapped — it is free-form upstream
+  and must never become an enum. **(3)** **Breaking**: `PeopleLocationFilter.city` went
+  from `string[]` to `KeywordFilter` (`{include, exclude}`), matching the live spec.
+  No README sample or test exercised it, so nothing else failed — which is exactly why
+  it needs calling out. **(4)** `JobCompanyFilter` cannot reuse `CompanyFilter`: its
+  `hq.country_code` is an include/exclude object (not `string[]`), it has no
+  `continent`/`sales_region`, and `size` is include-only. `is_agency` is typed
+  `boolean`, not `boolean | null` — `to_jsonable` strips `null`, so omission is the only
+  way to express the spec's tri-state "both", and it means the same thing.
 - **2026-06-19** — Synced three endpoints to the live spec. **(1)** The company
   search filter (`CompanyFilter`, shared by `search.people`/`search.companies`)
   gained `total_funding`/`last_funding_amount`/`last_funding_year` (ranges),

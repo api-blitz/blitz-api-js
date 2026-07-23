@@ -39,8 +39,9 @@ export type Experience = z.infer<typeof Experience>;
 
 /** A single education entry from a person's profile. */
 export const Education = blitzObject({
-  school: z.string().nullish(),
+  school_name: z.string().nullish(),
   degree: z.string().nullish(),
+  field_of_study: z.string().nullish(),
   start_date: z.string().nullish(),
   end_date: z.string().nullish(),
 });

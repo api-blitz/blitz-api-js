@@ -34,7 +34,7 @@ pnpm dlx @arethetypeswrong/cli --pack
   getters, and the options constructor. The only IO.
 - `src/base-client.ts` — pure, IO-free helpers: `to_jsonable`, URL/header
   building, retry math, error mapping, response parsing.
-- `src/resources/{account,search,enrichment,utils}.ts` — one class per API tag
+- `src/resources/{account,search,jobs,enrichment,utils}.ts` — one class per API tag
   group; each method calls `client.request(method, path, body, schema)`.
 - `src/types/` — Zod response schemas (`*.ts` per group, built on `blitzObject` =
   `z.looseObject`), request filter/param interfaces (`filters.ts`), and the

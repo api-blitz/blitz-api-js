@@ -658,3 +658,34 @@ export const LAST_FUNDING_TYPE = [
 ] as const;
 export type LastFundingType = (typeof LAST_FUNDING_TYPE)[number];
 export const LastFundingTypeSchema = z.enum(LAST_FUNDING_TYPE);
+
+export const SENIORITY = [
+  "0-2",
+  "2-5",
+  "5-10",
+  "10+",
+] as const;
+export type Seniority = (typeof SENIORITY)[number];
+export const SenioritySchema = z.enum(SENIORITY);
+
+export const EMPLOYMENT_TYPE = [
+  "FULL_TIME",
+  "PART_TIME",
+  "CONTRACTOR",
+  "TEMPORARY",
+  "INTERN",
+  "VOLUNTEER",
+  "PER_DIEM",
+  "OTHER",
+] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPE)[number];
+export const EmploymentTypeSchema = z.enum(EMPLOYMENT_TYPE);
+
+export const WORK_ARRANGEMENT = [
+  "On-site",
+  "Hybrid",
+  "Remote OK",
+  "Remote Solely",
+] as const;
+export type WorkArrangement = (typeof WORK_ARRANGEMENT)[number];
+export const WorkArrangementSchema = z.enum(WORK_ARRANGEMENT);

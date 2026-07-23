@@ -18,6 +18,9 @@ const SALES_REGION = ["NORAM", "EMEA"];
 const JOB_FUNCTION = ["Engineering", "Finance & Accounting"];
 const JOB_LEVEL = ["C-Team", "Director"];
 const LAST_FUNDING_TYPE = ["Series A", "Seed"];
+const SENIORITY = ["0-2", "2-5"];
+const EMPLOYMENT_TYPE = ["FULL_TIME", "INTERN"];
+const WORK_ARRANGEMENT = ["On-site", "Hybrid"];
 
 const DEFAULTS = {
   industry: INDUSTRY,
@@ -28,6 +31,9 @@ const DEFAULTS = {
   job_function: JOB_FUNCTION,
   job_level: JOB_LEVEL,
   last_funding_type: LAST_FUNDING_TYPE,
+  seniority: SENIORITY,
+  employment_type: EMPLOYMENT_TYPE,
+  work_arrangement: WORK_ARRANGEMENT,
 };
 
 /** `{ include: {items.enum}, exclude: {items.enum} }` — the industry/type shape. */
@@ -44,6 +50,14 @@ function filterProp(values: string[]) {
 /** `{ type: "array", items: {type:"string", enum} }` — the plain list shape. */
 function arrayEnumProp(values: string[]) {
   return { type: "array", items: { type: "string", enum: values } };
+}
+
+/** `{ include: {items.enum} }` — the include-only shape of `company.size` on jobs. */
+function includeOnlyProp(values: string[]) {
+  return {
+    type: "object",
+    properties: { include: { type: "array", items: { type: "string", enum: values } } },
+  };
 }
 
 function objSchema(properties: Record<string, unknown>) {
@@ -80,10 +94,31 @@ function companyBlock(v: typeof DEFAULTS) {
 }
 
 /**
- * A complete spec mirroring the real one: all 8 enums, each repeated across two
+ * The jobs request block: the three job-posting enums under `job`, plus
+ * `company.size` — which shares `employee_range`'s value list and is
+ * include-only (the spec exposes no `exclude` for it).
+ */
+function jobsBlock(v: typeof DEFAULTS) {
+  return objSchema({
+    job: objSchema({
+      seniority: filterProp(v.seniority),
+      employment_type: filterProp(v.employment_type),
+      work_arrangement: filterProp(v.work_arrangement),
+    }),
+    company: objSchema({
+      industry: filterProp(v.industry),
+      size: includeOnlyProp(v.employee_range),
+    }),
+  });
+}
+
+/**
+ * A complete spec mirroring the real one: all 11 enums, each repeated across two
  * content-types (json + multipart) and, for industry/type, include + exclude,
- * plus continent/sales_region under both companies.hq and employee-finder.
- * Every occurrence is identical, so it round-trips cleanly.
+ * plus continent/sales_region under both companies.hq and employee-finder, and
+ * the jobs block contributing the three job-posting enums (and `company.size`,
+ * which shares `EmployeeRange`). Every occurrence is identical, so it round-trips
+ * cleanly.
  */
 function fullSpec(overrides: Partial<typeof DEFAULTS> = {}) {
   const v = { ...DEFAULTS, ...overrides };
@@ -100,12 +135,13 @@ function fullSpec(overrides: Partial<typeof DEFAULTS> = {}) {
           job_level: arrayEnumProp(v.job_level),
         }),
       ),
+      "/v2/jobs/search": endpoint(jobsBlock(v)),
     },
   };
 }
 
 describe("extractEnums", () => {
-  it("maps all 8 owning properties to class names, in canonical order", () => {
+  it("maps all 11 owning properties to class names, in canonical order", () => {
     const enums = extractEnums(fullSpec());
     expect(Object.keys(enums)).toEqual([
       "Industry",
@@ -116,6 +152,9 @@ describe("extractEnums", () => {
       "JobFunction",
       "JobLevel",
       "LastFundingType",
+      "Seniority",
+      "EmploymentType",
+      "WorkArrangement",
     ]);
     expect(enums).toEqual({
       Industry: INDUSTRY,
@@ -126,7 +165,30 @@ describe("extractEnums", () => {
       JobFunction: JOB_FUNCTION,
       JobLevel: JOB_LEVEL,
       LastFundingType: LAST_FUNDING_TYPE,
+      Seniority: SENIORITY,
+      EmploymentType: EMPLOYMENT_TYPE,
+      WorkArrangement: WORK_ARRANGEMENT,
     });
+  });
+
+  it("collapses two properties sharing one class name into a single entry", () => {
+    // `employee_range` and `company.size` carry the same buckets and both map to
+    // EmployeeRange, so the shared class name must not open a second output slot —
+    // 12 keys here would mean `size` grew a class of its own.
+    const enums = extractEnums(fullSpec());
+    expect(enums.EmployeeRange).toEqual(EMPLOYEE_RANGE);
+    expect(Object.keys(enums)).toHaveLength(11);
+  });
+
+  it("throws when a property sharing a class name diverges from it", () => {
+    // `company.size` forking away from `employee_range` is a human decision.
+    const spec = {
+      paths: {
+        "/a": endpoint(objSchema({ employee_range: arrayEnumProp(EMPLOYEE_RANGE) })),
+        "/b": endpoint(objSchema({ size: includeOnlyProp(["1-10", "11-50", "51-200"]) })),
+      },
+    };
+    expect(() => extractEnums(spec)).toThrow(/EmployeeRange.*divergent/s);
   });
 
   it("collapses identical duplicate occurrences to a single list", () => {
@@ -166,6 +228,8 @@ describe("extractEnums", () => {
   });
 
   it("warns about and ignores an enum under an unmapped property", () => {
+    // `field` is the job's discipline: free-form upstream, so it must never be
+    // generated as an enum even if a future spec pins it to a value list.
     const spec = {
       paths: {
         "/v2/search/companies": endpoint(companyBlock(DEFAULTS)),
@@ -175,7 +239,16 @@ describe("extractEnums", () => {
             sales_region: arrayEnumProp(SALES_REGION),
             job_function: arrayEnumProp(JOB_FUNCTION),
             job_level: arrayEnumProp(JOB_LEVEL),
-            seniority: arrayEnumProp(["Junior", "Senior"]),
+          }),
+        ),
+        "/v2/jobs/search": endpoint(
+          objSchema({
+            job: objSchema({
+              seniority: filterProp(SENIORITY),
+              employment_type: filterProp(EMPLOYMENT_TYPE),
+              work_arrangement: filterProp(WORK_ARRANGEMENT),
+              field: arrayEnumProp(["Software Engineering", "Sales"]),
+            }),
           }),
         ),
       },
@@ -183,9 +256,9 @@ describe("extractEnums", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const enums = extractEnums(spec);
-      expect(enums).not.toHaveProperty("Seniority");
-      expect(Object.keys(enums)).toHaveLength(8);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("seniority"));
+      expect(enums).not.toHaveProperty("Field");
+      expect(Object.keys(enums)).toHaveLength(11);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("field"));
     } finally {
       warn.mockRestore();
     }

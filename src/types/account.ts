@@ -11,13 +11,19 @@ export const ActivePlan = blitzObject({
 });
 export type ActivePlan = z.infer<typeof ActivePlan>;
 
+/**
+ * A credit/rate value that is a number on metered plans and the literal
+ * `"unlimited"` on unlimited plans. The API returns either, so both must parse.
+ */
+const CreditValue = z.union([z.number(), z.literal("unlimited")]).nullish();
+
 /** The result of `client.account.key_info()` — key health and limits. */
 export const KeyInfo = blitzObject({
   valid: z.boolean().nullish(),
   id: z.string().nullish(),
-  remaining_credits: z.number().nullish(),
+  remaining_credits: CreditValue,
   next_reset_at: z.string().nullish(),
-  max_requests_per_seconds: z.number().nullish(),
+  max_requests_per_seconds: CreditValue,
   allowed_apis: blitzList(z.string()),
   active_plans: blitzList(ActivePlan),
 });

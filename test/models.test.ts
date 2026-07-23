@@ -5,12 +5,15 @@ import {
   CompanyDistributionByCountryResponse,
   CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
+  CompanyJobsResponse,
   CompanySearchResponse,
   CurrentDateResponse,
   DomainToLinkedinResponse,
+  Education,
   EmailEnrichmentResponse,
   EmailToPersonResponse,
   EmployeeFinderResponse,
+  JobSearchResponse,
   KeyInfo,
   LinkedinToDomainResponse,
   PeopleSearchResponse,
@@ -29,6 +32,12 @@ describe("response models", () => {
     expect(info.active_plans[0]?.name).toBe("Unlimited Leads");
   });
 
+  it('parses key info with unlimited credits (number | "unlimited" union)', () => {
+    const info = KeyInfo.parse(data.KEY_INFO_UNLIMITED);
+    expect(info.remaining_credits).toBe("unlimited");
+    expect(info.max_requests_per_seconds).toBe("unlimited");
+  });
+
   it("parses people search with a nested person", () => {
     const resp = PeopleSearchResponse.parse(data.PEOPLE_SEARCH);
     expect(resp.total_results).toBe(14337505);
@@ -38,7 +47,18 @@ describe("response models", () => {
     expect(person?.experiences[0]?.company_name).toBe("Google");
     expect(person?.experiences[0]?.job_location?.city).toBe("Sunnyvale");
     expect(person?.education[0]?.degree).toBe("Bachelor's degree");
+    expect(person?.education[0]?.school_name).toBe("Stanford University");
+    expect(person?.education[0]?.field_of_study).toBe("Computer Science");
     expect(person?.certifications[0]?.authority).toBe("Google");
+    // Guard the field names on the schema itself: `blitzObject` preserves unknown keys,
+    // so a value assertion alone would still pass if `school_name` regressed to `school`.
+    expect(Object.keys(Education.shape).sort()).toEqual([
+      "degree",
+      "end_date",
+      "field_of_study",
+      "school_name",
+      "start_date",
+    ]);
   });
 
   it("parses company search", () => {
@@ -48,6 +68,24 @@ describe("response models", () => {
     expect(company?.linkedin_id).toBe(1441);
     expect(company?.hq?.region).toBe("NORAM");
     expect(company?.specialties).toEqual(["search", "cloud"]);
+  });
+
+  it("parses job search with a nested job", () => {
+    const resp = JobSearchResponse.parse(data.JOB_SEARCH);
+    expect(resp.total_results).toBe(4821);
+    const job = resp.results[0];
+    expect(job?.title).toBe("Growth Marketing Manager, SMB Ads");
+    expect(job?.company_name).toBe("OpenAI");
+    // The API emits a space-separated timestamp with an offset, not ISO-8601.
+    expect(job?.date_posted).toBe("2026-07-08 23:00:07+02");
+    expect(job?.location?.city).toBe("San Francisco");
+    expect(job?.location?.country_code).toBe("US");
+  });
+
+  it("parses company jobs", () => {
+    const resp = CompanyJobsResponse.parse(data.COMPANY_JOBS);
+    expect(resp.total_results).toBe(37);
+    expect(resp.results[0]?.company_linkedin_url).toBe("https://www.linkedin.com/company/openai");
   });
 
   it("parses employee finder as page-paginated", () => {
@@ -96,6 +134,8 @@ describe("response models", () => {
   it("parses domain to linkedin", () => {
     const resp = DomainToLinkedinResponse.parse(data.DOMAIN_TO_LINKEDIN);
     expect(resp.company_linkedin_url).toBe("https://www.linkedin.com/company/blitz-api");
+    expect(resp.company_name).toBe("Blitz");
+    expect(resp.other[0]?.company_name).toBe("Blitz Other");
   });
 
   it("parses linkedin to domain", () => {

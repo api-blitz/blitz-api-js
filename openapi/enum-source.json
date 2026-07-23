@@ -10,6 +10,9 @@
     "SalesRegion": ["NORAM","LATAM","EMEA","APAC"],
     "JobFunction": ["Advertising & Marketing","Art, Culture and Creative Professionals","Construction","Customer/Client Service","Education","Engineering","Finance & Accounting","General Business & Management","Healthcare & Human Services","Human Resources","Information Technology","Legal","Manufacturing & Production","Operations","Other","Public Administration & Safety","Purchasing","Research & Development","Sales & Business Development","Science","Supply Chain & Logistics","Writing/Editing"],
     "JobLevel": ["C-Team","Director","Manager","Other","Staff","VP"],
-    "LastFundingType": ["Series unknown","Pre seed","Seed","Series A","Series B","Series C","Series D","Series E-J","Grant","Angel","Private equity","Debt financing","Non equity assistance","Post IPO equity","Undisclosed","Post IPO debt","Product crowdfunding","Equity crowdfunding","Corporate round","Convertible note","Secondary market","Initial coin offering","Post IPO secondary"]
+    "LastFundingType": ["Series unknown","Pre seed","Seed","Series A","Series B","Series C","Series D","Series E-J","Grant","Angel","Private equity","Debt financing","Non equity assistance","Post IPO equity","Undisclosed","Post IPO debt","Product crowdfunding","Equity crowdfunding","Corporate round","Convertible note","Secondary market","Initial coin offering","Post IPO secondary"],
+    "Seniority": ["0-2","2-5","5-10","10+"],
+    "EmploymentType": ["FULL_TIME","PART_TIME","CONTRACTOR","TEMPORARY","INTERN","VOLUNTEER","PER_DIEM","OTHER"],
+    "WorkArrangement": ["On-site","Hybrid","Remote OK","Remote Solely"]
   }
 }

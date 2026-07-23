@@ -11,11 +11,14 @@ import type {
   CompanyType,
   Continent,
   EmployeeRange,
+  EmploymentType,
   Industry,
   JobFunction,
   JobLevel,
   LastFundingType,
   SalesRegion,
+  Seniority,
+  WorkArrangement,
 } from "./enums.js";
 
 // Each accepts a known enum value (autocompleted) or a raw string.
@@ -27,6 +30,9 @@ export type SalesRegionValue = SalesRegion | (string & {});
 export type JobFunctionValue = JobFunction | (string & {});
 export type JobLevelValue = JobLevel | (string & {});
 export type LastFundingTypeValue = LastFundingType | (string & {});
+export type SeniorityValue = Seniority | (string & {});
+export type EmploymentTypeValue = EmploymentType | (string & {});
+export type WorkArrangementValue = WorkArrangement | (string & {});
 
 /** Free-text include/exclude keyword filter. */
 export interface KeywordFilter {
@@ -69,6 +75,8 @@ export interface CompanyHQFilter {
 
 /** Company search criteria, shared by `search.companies` and `search.people`. */
 export interface CompanyFilter {
+  /** Match specific companies by LinkedIn URL. Applied on `search.people` only;
+   * `search.companies` ignores it. */
   linkedin_url?: string[];
   name?: KeywordFilter;
   industry?: IndustryFilter;
@@ -100,7 +108,8 @@ export interface PeopleJobTitleFilter {
 
 /** Location filter for the people side of a people search. */
 export interface PeopleLocationFilter {
-  city?: string[];
+  /** Keywords matched against the city the person is based in. */
+  city?: KeywordFilter;
   country_code?: string[];
   continent?: ContinentValue[];
   sales_region?: SalesRegionValue[];
@@ -108,6 +117,8 @@ export interface PeopleLocationFilter {
 
 /** People search criteria for `search.people`. */
 export interface PeopleFilter {
+  /** Match specific people by their LinkedIn profile URL (server caps at 50). */
+  linkedin_url?: string[];
   job_title?: PeopleJobTitleFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
@@ -119,9 +130,90 @@ export interface PeopleFilter {
 /** One tier of a waterfall ICP cascade, tried in order until results are found. */
 export interface CascadeTier {
   include_title: string[];
-  location: string[];
-  include_headline_search: boolean;
+  /** Server defaults to worldwide when omitted. */
+  location?: string[];
+  /** Server defaults to `false` when omitted. */
+  include_headline_search?: boolean;
   exclude_title?: string[];
+}
+
+/**
+ * Include/exclude filter over a job's seniority band.
+ *
+ * These are **years-of-experience** bands on the posting (`0-2`, `2-5`, `5-10`,
+ * `10+`) — unrelated to the people-side {@link JobLevelValue} (`C-Team`, `VP`, …).
+ */
+export interface SeniorityFilter {
+  include?: SeniorityValue[];
+  exclude?: SeniorityValue[];
+}
+
+/** Include/exclude filter over the employment type a job offers. */
+export interface EmploymentTypeFilter {
+  include?: EmploymentTypeValue[];
+  exclude?: EmploymentTypeValue[];
+}
+
+/** Include/exclude filter over where the work is performed. */
+export interface WorkArrangementFilter {
+  include?: WorkArrangementValue[];
+  exclude?: WorkArrangementValue[];
+}
+
+/** Location filter for a job posting (the job's location, not the company HQ). */
+export interface JobLocationFilter {
+  city?: KeywordFilter;
+  /** ISO-3166 alpha-2 codes, matched exactly. */
+  country_code?: KeywordFilter;
+}
+
+/** Recency filter restricting results to jobs posted within the last N days. */
+export interface DatePostedFilter {
+  /** Required when `date_posted` is set (1–3650). */
+  last_days: number;
+}
+
+/** Job-level search criteria, shared by `jobs.search` and `jobs.company`. */
+export interface JobFilter {
+  title?: KeywordFilter;
+  description?: KeywordFilter;
+  /** Broad theme search across title, description, skills, and taxonomies. */
+  ai_keywords?: KeywordFilter;
+  /** Professional field or discipline. Free-form — accepts any label. */
+  field?: KeywordFilter;
+  seniority?: SeniorityFilter;
+  employment_type?: EmploymentTypeFilter;
+  work_arrangement?: WorkArrangementFilter;
+  location?: JobLocationFilter;
+  date_posted?: DatePostedFilter;
+}
+
+/** Include-only filter over the LinkedIn size buckets. The API exposes no `exclude` here. */
+export interface CompanySizeFilter {
+  include?: EmployeeRangeValue[];
+}
+
+/** Headquarters-location filter for the company side of a job search. */
+export interface JobCompanyHQFilter {
+  city?: KeywordFilter;
+  state?: KeywordFilter;
+  /** ISO-3166 alpha-2 codes, matched exactly. */
+  country_code?: KeywordFilter;
+}
+
+/**
+ * Company-level firmographic criteria for `jobs.search`, matched against the
+ * enriched company record behind each posting.
+ */
+export interface JobCompanyFilter {
+  /** `true` = only staffing/recruitment agencies, `false` = exclude confirmed
+   * agencies. Omit to include both. */
+  is_agency?: boolean;
+  industry?: IndustryFilter;
+  employee_count?: RangeFilter;
+  size?: CompanySizeFilter;
+  keywords?: KeywordFilter;
+  hq?: JobCompanyHQFilter;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +247,34 @@ export interface CompanySearchParams {
   max_items?: number;
 }
 
+export interface JobSearchParams {
+  job?: JobFilter;
+  company?: JobCompanyFilter;
+  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  max_results?: number;
+  cursor?: string;
+  /**
+   * Client-side cap on the **total** items streamed via `for await` / `collect()`
+   * across all pages; stops fetching once reached. Not sent on the wire — set
+   * `max_results` to bound the per-page (and therefore per-page billing) size.
+   */
+  max_items?: number;
+}
+
+export interface CompanyJobsParams {
+  company_linkedin_url: string;
+  job?: JobFilter;
+  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  max_results?: number;
+  cursor?: string;
+  /**
+   * Client-side cap on the **total** items streamed via `for await` / `collect()`
+   * across all pages; stops fetching once reached. Not sent on the wire — set
+   * `max_results` to bound the per-page (and therefore per-page billing) size.
+   */
+  max_items?: number;
+}
+
 export interface EmployeeFinderParams {
   company_linkedin_url: string;
   country_code?: string[];
@@ -177,6 +297,8 @@ export interface EmployeeFinderParams {
 export interface WaterfallIcpParams {
   company_linkedin_url: string;
   cascade: CascadeTier[];
+  /** Minimum LinkedIn connections for a match. Server defaults to 200. */
+  profile_min_connections?: number;
   max_results?: number;
 }
 
@@ -207,7 +329,8 @@ export interface DomainToLinkedinParams {
 }
 
 export interface CurrentDateParams {
-  region: string;
+  /** IANA timezone (e.g. `America/New_York`). Server defaults to `America/New_York`. */
+  region?: string;
 }
 
 /** Per-call request controls, accepted as the optional last argument of every method. */

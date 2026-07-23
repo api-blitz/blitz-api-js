@@ -83,7 +83,11 @@ describe("resources", () => {
 
     const page = await client().search.people({
       company: { industry: { include: ["Software Development"] } },
-      people: { job_level: ["VP"], job_title: { include: ["Engineer"] } },
+      people: {
+        job_level: ["VP"],
+        job_title: { include: ["Engineer"] },
+        linkedin_url: ["https://www.linkedin.com/in/example"],
+      },
       max_results: 5,
     });
 
@@ -91,7 +95,11 @@ describe("resources", () => {
     expect(page.response.total_results).toBe(14337505);
     expect(body).toEqual({
       company: { industry: { include: ["Software Development"] } },
-      people: { job_level: ["VP"], job_title: { include: ["Engineer"] } },
+      people: {
+        job_level: ["VP"],
+        job_title: { include: ["Engineer"] },
+        linkedin_url: ["https://www.linkedin.com/in/example"],
+      },
       max_results: 5,
     });
     expect(body).not.toHaveProperty("cursor");
@@ -152,6 +160,75 @@ describe("resources", () => {
     });
   });
 
+  it("jobs.search sends the job and company filters", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/jobs/search`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.JOB_SEARCH);
+      }),
+    );
+    const page = await client().jobs.search({
+      job: {
+        title: { include: ["Growth Marketing"] },
+        seniority: { include: ["2-5"] },
+        employment_type: { include: ["FULL_TIME"] },
+        work_arrangement: { exclude: ["On-site"] },
+        location: { country_code: { include: ["US"] } },
+        date_posted: { last_days: 30 },
+      },
+      company: {
+        is_agency: false,
+        industry: { include: ["Software Development"] },
+        size: { include: ["1001-5000"] },
+        hq: { city: { include: ["San Francisco"] } },
+      },
+      max_results: 1,
+    });
+    expect(page.data[0]?.title).toBe("Growth Marketing Manager, SMB Ads");
+    expect(page.response.total_results).toBe(4821);
+    expect(body).toEqual({
+      job: {
+        title: { include: ["Growth Marketing"] },
+        seniority: { include: ["2-5"] },
+        employment_type: { include: ["FULL_TIME"] },
+        work_arrangement: { exclude: ["On-site"] },
+        location: { country_code: { include: ["US"] } },
+        date_posted: { last_days: 30 },
+      },
+      company: {
+        is_agency: false,
+        industry: { include: ["Software Development"] },
+        size: { include: ["1001-5000"] },
+        hq: { city: { include: ["San Francisco"] } },
+      },
+      max_results: 1,
+    });
+    expect(body).not.toHaveProperty("cursor");
+  });
+
+  it("jobs.company scopes to a company_linkedin_url", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/jobs/company`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.COMPANY_JOBS);
+      }),
+    );
+    const page = await client().jobs.company({
+      company_linkedin_url: "https://www.linkedin.com/company/openai",
+      job: { field: { include: ["Software Engineering"] } },
+      max_results: 1,
+    });
+    expect(page.data[0]?.company_name).toBe("OpenAI");
+    expect(page.response.total_results).toBe(37);
+    expect(body).toEqual({
+      company_linkedin_url: "https://www.linkedin.com/company/openai",
+      job: { field: { include: ["Software Engineering"] } },
+      max_results: 1,
+    });
+  });
+
   it("search.waterfall_icp sends the cascade", async () => {
     let body: { cascade?: Array<{ include_title?: string[] }> } | undefined;
     server.use(
@@ -162,11 +239,13 @@ describe("resources", () => {
     );
     const result = await client().search.waterfall_icp({
       company_linkedin_url: "https://www.linkedin.com/company/openai",
-      cascade: [{ include_title: ["CEO"], location: ["WORLD"], include_headline_search: false }],
+      cascade: [{ include_title: ["CEO"] }],
+      profile_min_connections: 100,
       max_results: 5,
     });
     expect(WaterfallIcpResponse.parse(result)).toBeTruthy();
     expect(body?.cascade?.[0]?.include_title).toEqual(["CEO"]);
+    expect((body as { profile_min_connections?: number })?.profile_min_connections).toBe(100);
   });
 
   it("utils.current_date sends the region", async () => {
@@ -180,6 +259,18 @@ describe("resources", () => {
     const result = await client().utils.current_date({ region: "America/New_York" });
     expect(CurrentDateResponse.parse(result)).toBeTruthy();
     expect(body).toEqual({ region: "America/New_York" });
+  });
+
+  it("utils.current_date works with no argument (region optional)", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/utils/current-date`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.CURRENT_DATE);
+      }),
+    );
+    await client().utils.current_date();
+    expect(body).toEqual({});
   });
 
   it("enrichment.company_distribution_by_country posts the company url and types the response", async () => {

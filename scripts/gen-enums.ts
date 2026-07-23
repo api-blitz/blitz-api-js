@@ -51,16 +51,27 @@ const FETCH_ATTEMPTS = 3;
  * keyword (see `STRUCTURAL`). Declared in the canonical output order so the
  * generated cache — and therefore `enums.ts` — is deterministic regardless of
  * spec traversal order. `type` only ever appears as `company.type`.
+ *
+ * Two properties may share a class name when the spec repeats one value list
+ * under different keys: `size` (`company.size` on `/v2/jobs/search`) carries the
+ * same buckets as `employee_range`, so it maps onto `EmployeeRange` rather than
+ * emitting a duplicate. Sharing keeps the collapse behaviour above honest — if
+ * upstream ever forks the two lists apart, the divergence check throws and names
+ * both spec paths, which is exactly the human decision point we want.
  */
 const PROPERTY_TO_CLASS: Record<string, string> = {
   industry: "Industry",
   type: "CompanyType",
   employee_range: "EmployeeRange",
+  size: "EmployeeRange",
   continent: "Continent",
   sales_region: "SalesRegion",
   job_function: "JobFunction",
   job_level: "JobLevel",
   last_funding_type: "LastFundingType",
+  seniority: "Seniority",
+  employment_type: "EmploymentType",
+  work_arrangement: "WorkArrangement",
 };
 
 /** OpenAPI/JSON-Schema keywords skipped when resolving an enum's owning property. */

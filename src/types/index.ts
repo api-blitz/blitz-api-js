@@ -10,6 +10,7 @@ export * from "./account.js";
 export * from "./enrichment.js";
 export * from "./enums.js";
 export * from "./filters.js";
+export * from "./jobs.js";
 export * from "./search.js";
 export * from "./shared.js";
 export * from "./utils.js";

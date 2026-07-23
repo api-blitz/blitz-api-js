@@ -183,6 +183,89 @@ describe("cursor pagination (search.companies)", () => {
   });
 });
 
+describe("cursor pagination (jobs.search / jobs.company)", () => {
+  it("streams every job across pages and stops on cursor: null", async () => {
+    const bodies: Array<{ cursor?: string | null }> = [];
+    server.use(
+      http.post(`${BASE}/v2/jobs/search`, async ({ request }) => {
+        const body = (await request.json()) as { cursor?: string | null };
+        bodies.push(body);
+        if (!body.cursor) {
+          return HttpResponse.json({ results: [{ title: "J1" }], cursor: "jc2" });
+        }
+        return HttpResponse.json({ results: [{ title: "J2" }], cursor: null });
+      }),
+    );
+
+    const titles: Array<string | null | undefined> = [];
+    for await (const job of client().jobs.search({ max_results: 1 })) {
+      titles.push(job.title);
+    }
+
+    expect(titles).toEqual(["J1", "J2"]);
+    expect(bodies).toHaveLength(2); // stops after the null-cursor page
+    expect(bodies[0]).not.toHaveProperty("cursor"); // first call sends no cursor
+    expect(bodies[1]?.cursor).toBe("jc2"); // second call sends the returned cursor
+  });
+
+  it("paginates company jobs and keeps company_linkedin_url on every page", async () => {
+    const bodies: Array<{ cursor?: string | null; company_linkedin_url?: string }> = [];
+    server.use(
+      http.post(`${BASE}/v2/jobs/company`, async ({ request }) => {
+        const body = (await request.json()) as (typeof bodies)[number];
+        bodies.push(body);
+        if (!body.cursor) {
+          return HttpResponse.json({ results: [{ title: "CJ1" }], cursor: "cjc2" });
+        }
+        return HttpResponse.json({ results: [{ title: "CJ2" }], cursor: null });
+      }),
+    );
+
+    const jobs = await client()
+      .jobs.company({
+        company_linkedin_url: "https://www.linkedin.com/company/openai",
+        max_results: 1,
+      })
+      .collect();
+
+    expect(jobs.map((j) => j.title)).toEqual(["CJ1", "CJ2"]);
+    expect(bodies).toHaveLength(2);
+    // The scoping URL must be re-sent on the follow-up page, not just the first.
+    expect(bodies[1]?.company_linkedin_url).toBe("https://www.linkedin.com/company/openai");
+    expect(bodies[1]?.cursor).toBe("cjc2");
+  });
+
+  it("caps jobs with max_items and never sends it on the wire", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${BASE}/v2/jobs/search`, async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({
+          results: [{ title: "A" }, { title: "B" }],
+          cursor: `c${bodies.length + 1}`,
+        });
+      }),
+    );
+
+    const jobs = await client().jobs.search({ max_results: 2, max_items: 3 }).collect();
+
+    expect(jobs.map((j) => j.title)).toEqual(["A", "B", "A"]);
+    expect(bodies).toHaveLength(2); // stopped once the cap was reached
+    for (const body of bodies) expect(body).not.toHaveProperty("max_items");
+  });
+
+  it("throws BlitzError when the jobs cursor does not advance", async () => {
+    server.use(
+      http.post(`${BASE}/v2/jobs/search`, () =>
+        HttpResponse.json({ results: [{ title: "J" }], cursor: "same" }),
+      ),
+    );
+
+    const page = await client().jobs.search({ cursor: "same", max_results: 1 });
+    await expect(page.get_next_page()).rejects.toThrow(BlitzError);
+  });
+});
+
 describe("offset pagination (search.employee_finder)", () => {
   function install(bodies: Array<{ page?: number }>): void {
     server.use(

@@ -49,10 +49,20 @@ export const CompanyEnrichmentResponse = blitzObject({
 });
 export type CompanyEnrichmentResponse = z.infer<typeof CompanyEnrichmentResponse>;
 
+/** An additional company LinkedIn match for a domain, beyond the primary one. */
+export const DomainToLinkedinMatch = blitzObject({
+  company_linkedin_url: z.string().nullish(),
+  company_name: z.string().nullish(),
+});
+export type DomainToLinkedinMatch = z.infer<typeof DomainToLinkedinMatch>;
+
 /** Result of `enrichment.domain_to_linkedin` (domain -> company LinkedIn URL). */
 export const DomainToLinkedinResponse = blitzObject({
   found: z.boolean().nullish(),
   company_linkedin_url: z.string().nullish(),
+  company_name: z.string().nullish(),
+  // Runner-up matches when a domain resolves to more than one company.
+  other: blitzList(DomainToLinkedinMatch),
 });
 export type DomainToLinkedinResponse = z.infer<typeof DomainToLinkedinResponse>;
 
