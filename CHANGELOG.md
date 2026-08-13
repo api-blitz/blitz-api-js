@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/api-blitz/blitz-api-js/compare/v1.1.0...v1.2.0) (2026-08-13)
+
+
+### Features
+
+* add company and changelog resources with new endpoints ([7d40579](https://github.com/api-blitz/blitz-api-js/commit/7d405796508c0968469d56800dfca7f31802e4c6))
+
 ## [1.1.0](https://github.com/api-blitz/blitz-api-js/compare/v1.0.0...v1.1.0) (2026-07-23)
 
 
