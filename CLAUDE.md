@@ -10,9 +10,8 @@ changes — it records the design decisions so you don't re-derive them.
   SDK 1:1. Do not "camelCase-ify". Biome's `useNamingConvention` is intentionally off.
 - **Responses are hand-written Zod schemas**, never generated. The spec's responses
   are example-only. Build schemas with `blitzObject` (= `z.looseObject`) so unknown
-  fields are preserved (forward-compat). Verify shapes against the docs examples via
-  the Blitz MCP (`mcp__claude_ai_Blitz__*`, OpenAPI at
-  `/openapi/api-reference/v2.openapi.json`).
+  fields are preserved (forward-compat). Verify shapes against the public docs
+  examples and the OpenAPI spec at `https://api.blitz-api.ai/openapi`.
 - **Async-only.** One `BlitzAPI` class; methods return a `Promise` (or a `PagePromise`
   for the paginated lists). Uses the global `fetch` (overridable via the `fetch` option).
 - **Pagination** (`src/pagination.ts`): `search.people`/`companies` and
@@ -42,7 +41,8 @@ pnpm lint && pnpm typecheck && pnpm gen:enums:check && pnpm test && pnpm build
 
 ## Adding / changing an endpoint
 
-1. Get the request schema + a response example from the Blitz MCP.
+1. Get the request schema + a response example from the public docs / OpenAPI spec
+   (`https://api.blitz-api.ai/openapi`).
 2. Request types → add/extend an interface in `src/types/filters.ts` (snake_case).
 3. Response model → add a `blitzObject` schema in the right `src/types/<group>.ts`,
    reusing `shared.ts` models; export it from `src/types/index.ts`.

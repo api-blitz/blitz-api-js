@@ -7,6 +7,8 @@
  */
 
 export * from "./account.js";
+export * from "./changelog.js";
+export * from "./company.js";
 export * from "./enrichment.js";
 export * from "./enums.js";
 export * from "./filters.js";

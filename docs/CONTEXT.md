@@ -13,7 +13,7 @@
 The official **typed TypeScript SDK for the Blitz API** (https://blitz-api.ai), a
 B2B data / GTM REST API (people & company search, contact enrichment, utilities).
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
-behaves the same way over all 17 endpoints. `blitz-api-py` covers the same
+behaves the same way over all 19 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
 when changing any endpoint.
 
@@ -38,7 +38,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 - **Status conventions**: 401 invalid/missing key · 402 insufficient credits ·
   404 not found · 429 rate limited (wait 60s then retry) · 5xx server error.
 
-### Endpoint → method → response model (all 17)
+### Endpoint → method → response model (all 19)
 
 | HTTP | Path | SDK method | Response model |
 | --- | --- | --- | --- |
@@ -49,6 +49,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/search/companies` | `search.companies()` | `CompanySearchResponse` |
 | POST | `/v2/jobs/search` | `jobs.search()` | `JobSearchResponse` |
 | POST | `/v2/jobs/company` | `jobs.company()` | `CompanyJobsResponse` |
+| POST | `/v2/company/tam-by-jobs` | `company.tam_by_jobs()` | `TamByJobsResponse` |
 | POST | `/v2/enrichment/email` | `enrichment.email()` | `EmailEnrichmentResponse` |
 | POST | `/v2/enrichment/phone` | `enrichment.phone()` | `PhoneEnrichmentResponse` |
 | POST | `/v2/enrichment/email-to-person` | `enrichment.email_to_person()` | `EmailToPersonResponse` |
@@ -59,13 +60,14 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/enrichment/company-distribution-by-country` | `enrichment.company_distribution_by_country()` | `CompanyDistributionByCountryResponse` |
 | POST | `/v2/enrichment/company-distribution-by-department` | `enrichment.company_distribution_by_department()` | `CompanyDistributionByDepartmentResponse` |
 | POST | `/v2/utils/current-date` | `utils.current_date()` | `CurrentDateResponse` |
+| GET | `/changelog/` | `changelog.list()` | `ChangelogResponse` |
 
 ### Re-deriving the API surface
 
-The full spec/docs come from the **Blitz docs MCP** (`mcp__claude_ai_Blitz__*`).
-The OpenAPI spec lives at `/openapi/api-reference/v2.openapi.json`; use `jq`
-against it for request schemas and response `example` blocks. The `.md` mirror of
-any docs page is at `https://docs.blitz-api.ai/<path>.md`.
+The full spec/docs are public: fetch the OpenAPI spec from
+`https://api.blitz-api.ai/openapi` and use `jq` against it for request schemas and
+response `example` blocks. The `.md` mirror of any docs page is at
+`https://docs.blitz-api.ai/<path>.md`.
 
 ---
 
@@ -75,8 +77,8 @@ The spec's **request** bodies are richly typed (nested objects, enums) — model
 precisely as TypeScript interfaces + generated enums. The spec's **response**
 bodies are example-only (`{"type":"object","example":{…}}`, no `properties`), so a
 generator would emit `unknown` for every response. Therefore **response models are
-hand-derived** from the example JSON (re-verified against the live docs via the
-MCP) as Zod schemas. `z.looseObject` keeps unknown fields so additions don't break
+hand-derived** from the example JSON (re-verified against the live docs) as Zod
+schemas. `z.looseObject` keeps unknown fields so additions don't break
 deserialization between SDK releases.
 
 ---
@@ -97,11 +99,12 @@ deserialization between SDK releases.
   raw strings). The string value is what goes on the wire.
 - **`fetch` + `AbortSignal.timeout()`** instead of httpx; `fetch`/`sleep`/`now` are
   injectable for tests.
-- **Completeness fix caught by the MCP cross-check**: the live `waterfall-icp`
+- **Completeness fix caught by cross-checking the live spec**: the live `waterfall-icp`
   response includes top-level `company_linkedin_url`, `max_results`, and
   `results_length` (its old spec example was `null`, so the Python model omits
   them). The TS `WaterfallIcpResponse` includes them.
-- **Pagination**: `search.people`/`companies` and `jobs.search`/`company` (cursor) and
+- **Pagination**: `search.people`/`companies`, `jobs.search`/`company`, and
+  `company.tam_by_jobs` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` (`src/pagination.ts`),
   Stainless/OpenAI-style but
   snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates the same
@@ -121,7 +124,7 @@ deserialization between SDK releases.
   lives in two factories (`make_cursor_page_promise`/`make_offset_page_promise`) so
   all four cursor methods share one path and the guard lives in one place.
   - **`max_results` is page size, not a total** (the API bills 1 credit per result
-    returned), so `for await` streams every match up to the server limit. The five
+    returned), so `for await` streams every match up to the server limit. The six
     paginated methods therefore accept a client-side **`max_items`** total cap that
     bounds `for await`/`collect()` and stops fetching once reached. `max_items` is
     destructured off in the resource method and **never sent on the wire** (it's not
@@ -142,13 +145,13 @@ src/
   rate-limit.ts   RateLimiter: a single token bucket; injectable now()/sleep().
                   The client holds one per endpoint path (Map), so each endpoint is
                   throttled independently.
-  base-client.ts  IO-free: to_jsonable, build_url/headers, should_retry, backoff_seconds,
+  base-client.ts  IO-free: to_jsonable, build_url (optional query)/headers, should_retry, backoff_seconds,
                   retry_delay, make_status_error, parse_json_body, parse_model.
                   STATUS_ERRORS maps code->class.
   client.ts       BlitzAPI: the fetch retry loop, options ctor, lazy memoized resource getters.
   pagination.ts   Page/CursorPage/OffsetPage/PagePromise: auto-pagination for the
                   search.* and jobs.* lists.
-  resources/      One module per OpenAPI tag group (account/search/jobs/enrichment/utils).
+  resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog).
   types/
     models.ts     blitzObject = (shape) => z.looseObject(shape);
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
@@ -157,7 +160,7 @@ src/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement. Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
-    account/search/jobs/enrichment/utils.ts  Response schemas + inferred types per group.
+    account/search/jobs/company/enrichment/utils/changelog.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
 scripts/gen-enums.ts        --fetch pulls the live spec, de-dups, rewrites the cache + enums.ts;
                             default/--check render from the cache offline (CI drift guard).
@@ -258,8 +261,19 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
-- **2026-07-23** — Closed server-parity gaps found by auditing `blitz-api` (server = source of
-  truth, cross-checked against the live spec) field-by-field. **(1)** `KeyInfo.remaining_credits`
+- **2026-08-13** — Added `company.tam_by_jobs()` (`POST /v2/company/tam-by-jobs`, cursor-paginated,
+  new `client.company` namespace; the streamed item is a `{ company, matched_jobs }` match reusing
+  shared `Company`, and the response carries **no `total_results`**; `min_per_company` via
+  `TamJobFilter extends JobFilter` so the shared `JobFilter` stays clean; `company` reuses
+  `JobCompanyFilter`) and the public `changelog.list()` (`GET /changelog/`, new `client.changelog`
+  namespace; not paginated; response is a top-level `blitzList(ChangelogEntry)`; `type` a free-form
+  string). Added the SDK's first GET query params: `build_url(baseUrl, path, query?)` + a trailing
+  `query?` on `client.request`, with the per-endpoint rate limiter still keyed on the base path.
+  Fixed the enum generator to skip the `responses` subtree — the live spec's changelog response
+  `type` enum otherwise mapped onto `CompanyType` (`PROPERTY_TO_CLASS["type"]`) and broke
+  `gen:enums:fetch`. Mirrored 1:1 in `blitz-api-py`.
+- **2026-07-23** — Closed parity gaps found by auditing against the live spec (source of
+  truth) field-by-field. **(1)** `KeyInfo.remaining_credits`
   and `max_requests_per_seconds` widened to `number | "unlimited"` — the API returns the literal
   `"unlimited"` on unlimited plans, which a `number`-only schema **rejected** (`APIResponseValidationError`).
   **(2)** `Education.school` → **`school_name`** and added `field_of_study`: the server always emits

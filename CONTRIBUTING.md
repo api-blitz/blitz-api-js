@@ -43,8 +43,8 @@ pnpm dlx @arethetypeswrong/cli --pack
 
 Response models are **hand-written**: the OpenAPI spec types request bodies
 precisely but its responses are example-only, so a generator can't drive them.
-Schemas are derived from the docs' response examples (verified via the Blitz docs
-MCP) and use `z.looseObject` so unknown fields are preserved (forward-compat).
+Schemas are derived from the docs' response examples (verified against the public
+docs / OpenAPI spec) and use `z.looseObject` so unknown fields are preserved (forward-compat).
 
 The public surface is **snake_case everywhere** (methods, params, response keys)
 to match the API and the Python SDK 1:1. Biome's `useNamingConvention` rule is

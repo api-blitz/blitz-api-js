@@ -179,6 +179,12 @@ export function extractEnums(spec: unknown): Record<string, string[]> {
     }
 
     for (const [key, value] of Object.entries(obj)) {
+      // Enums are generated from request schemas only. Skip `responses` subtrees so
+      // a response-side enum never collides with a request enum under the
+      // owning-property mapping — e.g. the changelog response's `type`
+      // (breaking/feature/…) would otherwise map onto `CompanyType` and trip the
+      // divergence guard, breaking `--fetch`.
+      if (key === "responses") continue;
       walk(value, [...path, key]);
     }
   }

@@ -39,8 +39,17 @@ export function to_jsonable(value: unknown): unknown {
   return value;
 }
 
-export function build_url(baseUrl: string, path: string): string {
-  return new URL(path.replace(/^\/+/, ""), baseUrl).toString();
+/** Query-string values accepted by {@link build_url}. `undefined` values are skipped. */
+export type QueryParams = Record<string, string | number | undefined>;
+
+export function build_url(baseUrl: string, path: string, query?: QueryParams): string {
+  const url = new URL(path.replace(/^\/+/, ""), baseUrl);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+  }
+  return url.toString();
 }
 
 export function build_headers(apiKey: string): Record<string, string> {

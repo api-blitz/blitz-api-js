@@ -229,6 +229,63 @@ describe("resources", () => {
     });
   });
 
+  it("company.tam_by_jobs posts job+company filters, no cursor/max_items on the wire", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/company/tam-by-jobs`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.TAM_BY_JOBS);
+      }),
+    );
+    const page = await client().company.tam_by_jobs({
+      job: { title: { include: ["Account Executive"] }, min_per_company: 3 },
+      company: { industry: { include: ["Software Development"] } },
+      max_results: 10,
+      max_items: 50,
+    });
+    expect(page.data[0]?.matched_jobs).toBe(7);
+    expect(page.data[0]?.company?.name).toBe("Google");
+    expect(body).toEqual({
+      job: { title: { include: ["Account Executive"] }, min_per_company: 3 },
+      company: { industry: { include: ["Software Development"] } },
+      max_results: 10,
+    });
+    expect(body).not.toHaveProperty("cursor");
+    expect(body).not.toHaveProperty("max_items");
+  });
+
+  it("changelog.list issues a public GET and serializes query params", async () => {
+    let method: string | undefined;
+    let params: URLSearchParams | undefined;
+    server.use(
+      http.get(`${BASE}/changelog/`, ({ request }) => {
+        method = request.method;
+        params = new URL(request.url).searchParams;
+        return HttpResponse.json(data.CHANGELOG);
+      }),
+    );
+    // Deliberately-invalid key: the endpoint is public, so this still succeeds.
+    const c = new BlitzAPI({ api_key: "not-a-real-key", rate_limit_rps: null });
+    const entries = await c.changelog.list({ days: 7, limit: 25 });
+    expect(method).toBe("GET");
+    expect(entries[0]?.type).toBe("feature");
+    expect(params?.get("days")).toBe("7");
+    expect(params?.get("limit")).toBe("25");
+  });
+
+  it("changelog.list omits absent query params (bare trailing-slash URL)", async () => {
+    let requestUrl: string | undefined;
+    server.use(
+      http.get(`${BASE}/changelog/`, ({ request }) => {
+        requestUrl = request.url;
+        return HttpResponse.json(data.CHANGELOG);
+      }),
+    );
+    await client().changelog.list();
+    expect(requestUrl).toBe(`${BASE}/changelog/`);
+    expect(requestUrl).not.toContain("?");
+  });
+
   it("search.waterfall_icp sends the cascade", async () => {
     let body: { cascade?: Array<{ include_title?: string[] }> } | undefined;
     server.use(

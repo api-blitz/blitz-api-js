@@ -263,6 +263,46 @@ describe("extractEnums", () => {
       warn.mockRestore();
     }
   });
+
+  it("ignores response-side enums so the changelog `type` never collides with CompanyType", () => {
+    // The changelog *response* pins `type` to breaking/feature/… — an enum whose
+    // owning property is `type`. Walking responses would map it onto CompanyType
+    // (a request enum with different values) and trip the divergence guard,
+    // breaking `--fetch`. Response subtrees must be skipped.
+    const spec = fullSpec() as {
+      paths: Record<string, { post: Record<string, unknown> }>;
+    };
+    spec.paths["/v2/jobs/search"].post.responses = {
+      "200": {
+        content: {
+          "application/json": {
+            schema: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: {
+                    type: "string",
+                    enum: [
+                      "breaking",
+                      "feature",
+                      "improvement",
+                      "fix",
+                      "deprecation",
+                      "announcement",
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const enums = extractEnums(spec);
+    expect(enums.CompanyType).toEqual(COMPANY_TYPE);
+    expect(Object.keys(enums)).toHaveLength(11);
+  });
 });
 
 describe("buildArtifact / serializeArtifact", () => {

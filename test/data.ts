@@ -91,7 +91,7 @@ export const PEOPLE_SEARCH = {
   results: [PERSON],
   results_length: 1,
   max_results: 1,
-  cursor: "eyJzIjpbNTAwXX0",
+  cursor: "example_cursor_people_p2",
 };
 
 export const COMPANY_SEARCH = {
@@ -99,7 +99,7 @@ export const COMPANY_SEARCH = {
   results: [COMPANY],
   results_length: 1,
   max_results: 1,
-  cursor: "eyJpIjoiY2E5OTcxZjU",
+  cursor: "example_cursor_companies_p2",
 };
 
 const JOB = {
@@ -118,7 +118,7 @@ export const JOB_SEARCH = {
   results: [JOB],
   results_length: 1,
   max_results: 1,
-  cursor: "eyJzIjpbMTc1MjAxNzIwNzAwMF19",
+  cursor: "example_cursor_jobs_p2",
 };
 
 export const COMPANY_JOBS = {
@@ -126,7 +126,7 @@ export const COMPANY_JOBS = {
   results: [JOB],
   results_length: 1,
   max_results: 1,
-  cursor: "eyJzIjpbMTc1MjAxNzIwNzAwMV19",
+  cursor: "example_cursor_company_jobs_p2",
 };
 
 export const EMPLOYEE_FINDER = {
@@ -214,3 +214,24 @@ export const DEPARTMENT_DISTRIBUTION = {
     { department: "Other", count: 54, percentage_ratio: 4.38 },
   ],
 };
+
+/** Cursor-paginated result of `company.tam_by_jobs` (a company + matched_jobs, no total_results). */
+export const TAM_BY_JOBS = {
+  results: [{ company: COMPANY, matched_jobs: 7 }],
+  results_length: 1,
+  max_results: 1,
+  cursor: "example_cursor_tam_p2",
+};
+
+/** Public changelog: a top-level array of entries, newest-first. */
+export const CHANGELOG = [
+  {
+    date: "2026-08-01",
+    type: "feature",
+    title: "Added the company TAM-by-jobs endpoint",
+    body: "Build a Total Addressable Market of companies from live hiring signals.",
+    affected_endpoints: ["/v2/company/tam-by-jobs"],
+    links: [{ label: "Docs", url: "https://docs.blitz-api.ai/changelog" }],
+  },
+  { date: "2026-07-15", type: "fix", title: "Fixed a cursor pagination edge case" },
+];

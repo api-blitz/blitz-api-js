@@ -5,6 +5,7 @@ import {
   build_url,
   make_status_error,
   parse_success_body,
+  type QueryParams,
   retry_delay,
   should_retry,
   to_jsonable,
@@ -13,6 +14,8 @@ import * as C from "./constants.js";
 import { APIConnectionError, APITimeoutError, BlitzError } from "./errors.js";
 import { defaultNow, defaultSleep, type NowFn, RateLimiter, type SleepFn } from "./rate-limit.js";
 import { AccountResource } from "./resources/account.js";
+import { ChangelogResource } from "./resources/changelog.js";
+import { CompanyResource } from "./resources/company.js";
 import { EnrichmentResource } from "./resources/enrichment.js";
 import { JobsResource } from "./resources/jobs.js";
 import { SearchResource } from "./resources/search.js";
@@ -74,8 +77,10 @@ export class BlitzAPI {
   #account?: AccountResource;
   #search?: SearchResource;
   #jobs?: JobsResource;
+  #company?: CompanyResource;
   #enrichment?: EnrichmentResource;
   #utils?: UtilsResource;
+  #changelog?: ChangelogResource;
 
   constructor(options: BlitzAPIOptions = {}) {
     const apiKey = options.api_key ?? globalThis.process?.env?.[C.API_KEY_ENV_VAR];
@@ -113,8 +118,9 @@ export class BlitzAPI {
     body: unknown,
     schema: S,
     options?: RequestOptions,
+    query?: QueryParams,
   ): Promise<z.infer<S>> {
-    const url = build_url(this.base_url, path);
+    const url = build_url(this.base_url, path, query);
     const headers = build_headers(this.api_key);
     const jsonBody = body === undefined ? undefined : to_jsonable(body);
     const fetchFn = this.#fetch;
@@ -191,6 +197,12 @@ export class BlitzAPI {
     return this.#jobs;
   }
 
+  /** Company: build a Total Addressable Market of companies (by jobs). */
+  get company(): CompanyResource {
+    this.#company ??= new CompanyResource(this);
+    return this.#company;
+  }
+
   /** Enrichment: email, phone, and reverse lookups. */
   get enrichment(): EnrichmentResource {
     this.#enrichment ??= new EnrichmentResource(this);
@@ -201,6 +213,12 @@ export class BlitzAPI {
   get utils(): UtilsResource {
     this.#utils ??= new UtilsResource(this);
     return this.#utils;
+  }
+
+  /** Changelog: the public Blitz API changelog. */
+  get changelog(): ChangelogResource {
+    this.#changelog ??= new ChangelogResource(this);
+    return this.#changelog;
   }
 }
 

@@ -188,6 +188,21 @@ export interface JobFilter {
   date_posted?: DatePostedFilter;
 }
 
+/**
+ * Job criteria for `company.tam_by_jobs` — the same shape as {@link JobFilter}
+ * plus a per-company floor. Extending (rather than adding the field to
+ * `JobFilter`) keeps the shared filter used by `jobs.search`/`jobs.company`,
+ * which have no such field, clean.
+ */
+export interface TamJobFilter extends JobFilter {
+  /**
+   * Only include companies with at least this many matching job postings
+   * (integer, 0–25; `0` = unset). Raises the bar for what counts as a hit when
+   * building a Total Addressable Market.
+   */
+  min_per_company?: number;
+}
+
 /** Include-only filter over the LinkedIn size buckets. The API exposes no `exclude` here. */
 export interface CompanySizeFilter {
   include?: EmployeeRangeValue[];
@@ -275,6 +290,29 @@ export interface CompanyJobsParams {
   max_items?: number;
 }
 
+/**
+ * Params for `company.tam_by_jobs` — build a Total Addressable Market of
+ * companies from live hiring signals (each result is a company plus how many of
+ * its current postings matched). Cursor-paginated. The API bills **1 credit per
+ * result returned** (up to `max_results`). Can raise `AuthenticationError` (401),
+ * `InsufficientCreditsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ */
+export interface TamByJobsParams {
+  /** Job-level filters plus `min_per_company` (see {@link TamJobFilter}). */
+  job?: TamJobFilter;
+  /** Company firmographics — the same block as `jobs.search` ({@link JobCompanyFilter}). */
+  company?: JobCompanyFilter;
+  /** Results **per page** (1–50, default 10). The API bills 1 credit per result returned. */
+  max_results?: number;
+  cursor?: string;
+  /**
+   * Client-side cap on the **total** items streamed via `for await` / `collect()`
+   * across all pages; stops fetching once reached. Not sent on the wire — set
+   * `max_results` to bound the per-page (and therefore per-page billing) size.
+   */
+  max_items?: number;
+}
+
 export interface EmployeeFinderParams {
   company_linkedin_url: string;
   country_code?: string[];
@@ -331,6 +369,20 @@ export interface DomainToLinkedinParams {
 export interface CurrentDateParams {
   /** IANA timezone (e.g. `America/New_York`). Server defaults to `America/New_York`. */
   region?: string;
+}
+
+/**
+ * Params for `changelog.list` — the public Blitz API changelog.
+ *
+ * The endpoint is **public** (no credits, and it works regardless of API-key
+ * validity) and **not paginated** — it returns a plain array, newest-first,
+ * filtered by these query-string parameters.
+ */
+export interface ChangelogParams {
+  /** Only return entries from the last N days (integer > 0). Omit for all history. */
+  days?: number;
+  /** Maximum number of entries to return (integer > 0, server default 50). */
+  limit?: number;
 }
 
 /** Per-call request controls, accepted as the optional last argument of every method. */

@@ -161,15 +161,17 @@ always call the API from your backend.
 
 ## Endpoints
 
-All methods are grouped into five namespaces:
+All methods are grouped into seven namespaces:
 
 | Namespace | Methods |
 | --- | --- |
 | `client.account` | `key_info()` |
 | `client.search` | `people()`, `companies()`, `employee_finder()`, `waterfall_icp()` |
 | `client.jobs` | `search()`, `company()` |
+| `client.company` | `tam_by_jobs()` |
 | `client.enrichment` | `email()`, `phone()`, `email_to_person()`, `phone_to_person()`, `company()`, `domain_to_linkedin()`, `linkedin_to_domain()`, `company_distribution_by_country()`, `company_distribution_by_department()` |
 | `client.utils` | `current_date()` |
+| `client.changelog` | `list()` |
 
 Each method takes a single options object (snake_case keys) and returns a typed,
 Zod-validated response (also snake_case). Enum-backed filter fields (e.g.
@@ -182,18 +184,40 @@ import { INDUSTRY } from "blitz-api-js"; // the full value array (534 industries
 import type { CompanyFilter, Industry } from "blitz-api-js";
 ```
 
-The five list methods — `search.people`, `search.companies`, `search.employee_finder`,
-`jobs.search`, `jobs.company` — return a paginated `PagePromise` instead of a plain
-response (see [Pagination](#pagination)). `waterfall_icp` and the
-`enrichment`/`utils`/`account` methods return their response directly.
+The six list methods — `search.people`, `search.companies`, `search.employee_finder`,
+`jobs.search`, `jobs.company`, `company.tam_by_jobs` — return a paginated `PagePromise`
+instead of a plain response (see [Pagination](#pagination)). `waterfall_icp`,
+`changelog.list`, and the `enrichment`/`utils`/`account` methods return their response
+directly.
+
+`client.company.tam_by_jobs` builds a Total Addressable Market from live hiring signals
+— each result is a company plus how many of its current postings matched (1 credit per
+result). `client.changelog.list` returns the **public** API changelog (no credits, no
+key required, not paginated):
+
+```ts
+// TAM: companies hiring for a role, with ≥3 matching postings each.
+for await (const match of client.company.tam_by_jobs({
+  job: { title: { include: ["Account Executive"] }, min_per_company: 3 },
+  company: { industry: { include: ["Software Development"] } },
+  max_results: 50,
+  max_items: 200,
+})) {
+  console.log(match.company?.name, match.matched_jobs);
+}
+
+// Public changelog, last 30 days.
+const entries = await client.changelog.list({ days: 30 });
+for (const e of entries) console.log(e.date, e.type, e.title);
+```
 
 ## Pagination
 
-`search.people`, `search.companies`, `jobs.search` and `jobs.company` are
-**cursor**-paginated; `search.employee_finder` is **page**-paginated. Each returns a
-`PagePromise` you can either `await` for the first page or `for await` to stream every
-item across all pages — each page is fetched on demand, through the client's rate
-limiter.
+`search.people`, `search.companies`, `jobs.search`, `jobs.company` and
+`company.tam_by_jobs` are **cursor**-paginated; `search.employee_finder` is
+**page**-paginated. Each returns a `PagePromise` you can either `await` for the first
+page or `for await` to stream every item across all pages — each page is fetched on
+demand, through the client's rate limiter.
 
 > **`max_results` is the page size, not a total.** It's "results per page" (1–50), and
 > the API **bills 1 credit per result returned**. A bare `for await` streams *every*
@@ -240,8 +264,8 @@ for await (const job of client.jobs.search({
 reached; it bounds the total fetched to within one page (`≈ ceil(max_items / max_results)
 * max_results`), so tune `max_results` too for tight spend control. Auto-pagination
 otherwise stops when the API signals the end (`cursor: null`, or `page` beyond
-`total_pages`). `search.waterfall_icp` returns a single ranked result set and is not
-paginated.
+`total_pages`). `search.waterfall_icp` returns a single ranked result set, and
+`changelog.list` returns a plain array — neither is paginated.
 
 ## Configuration
 

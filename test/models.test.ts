@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  ChangelogResponse,
   CompanyDistributionByCountryResponse,
   CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
@@ -19,6 +20,7 @@ import {
   PeopleSearchResponse,
   PhoneEnrichmentResponse,
   PhoneToPersonResponse,
+  TamByJobsResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
 import * as data from "./data.js";
@@ -163,6 +165,32 @@ describe("response models", () => {
     expect(resp.distribution[0]?.department).toBe("Engineering");
     expect(resp.distribution[0]?.count).toBe(320);
     expect(resp.distribution[0]?.percentage_ratio).toBe(25.93);
+  });
+
+  it("parses tam by jobs (a company + matched_jobs, no total_results)", () => {
+    const resp = TamByJobsResponse.parse(data.TAM_BY_JOBS);
+    expect(resp.results[0]?.matched_jobs).toBe(7);
+    expect(resp.results[0]?.company?.name).toBe("Google");
+    expect(resp.cursor).toBe("eyJ0YW0iOjF9");
+    // The TAM envelope carries no total_results (unlike the search/jobs envelopes).
+    expect((resp as Record<string, unknown>).total_results).toBeUndefined();
+  });
+
+  it("parses the changelog as a top-level array", () => {
+    const resp = ChangelogResponse.parse(data.CHANGELOG);
+    expect(Array.isArray(resp)).toBe(true);
+    expect(resp).toHaveLength(2);
+    expect(resp[0]?.type).toBe("feature");
+    expect(resp[0]?.affected_endpoints).toEqual(["/v2/company/tam-by-jobs"]);
+    expect(resp[0]?.links[0]?.url).toBe("https://docs.blitz-api.ai/changelog");
+    // Optional lists absent on the second entry coerce to [].
+    expect(resp[1]?.affected_endpoints).toEqual([]);
+    expect(resp[1]?.links).toEqual([]);
+  });
+
+  it("coerces a null/absent changelog body to [] (top-level blitzList)", () => {
+    expect(ChangelogResponse.parse(null)).toEqual([]);
+    expect(ChangelogResponse.parse(undefined)).toEqual([]);
   });
 
   it("coerces null list fields to [] (top-level and nested)", () => {
