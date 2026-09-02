@@ -32,11 +32,19 @@ describe("response models", () => {
     expect(info.max_requests_per_seconds).toBe(5);
     expect(info.allowed_apis).toEqual(["/enrichment/email", "/search/people"]);
     expect(info.active_plans[0]?.name).toBe("Unlimited Leads");
+    expect(info.records_remaining).toBe(99.5);
+    // key-info is the one endpoint that is not rate limited, so it carries no `rate_limit`.
+    expect(info.fair_usage?.request_id).toBe("019bae09-0055-7441-b2ea-16086e499219");
+    expect(info.fair_usage?.rate_limit).toBeUndefined();
+    // Guard the field name on the schema itself: `blitzObject` preserves unknown keys, so a
+    // value assertion alone would still pass if `records_remaining` regressed to `remaining_credits`.
+    expect(Object.keys(KeyInfo.shape)).toContain("records_remaining");
+    expect(Object.keys(KeyInfo.shape)).not.toContain("remaining_credits");
   });
 
-  it('parses key info with unlimited credits (number | "unlimited" union)', () => {
+  it('parses key info on an unlimited plan (number | "unlimited" union)', () => {
     const info = KeyInfo.parse(data.KEY_INFO_UNLIMITED);
-    expect(info.remaining_credits).toBe("unlimited");
+    expect(info.records_remaining).toBe("unlimited");
     expect(info.max_requests_per_seconds).toBe("unlimited");
   });
 
@@ -171,9 +179,63 @@ describe("response models", () => {
     const resp = TamByJobsResponse.parse(data.TAM_BY_JOBS);
     expect(resp.results[0]?.matched_jobs).toBe(7);
     expect(resp.results[0]?.company?.name).toBe("Google");
-    expect(resp.cursor).toBe("eyJ0YW0iOjF9");
+    expect(resp.cursor).toBe("example_cursor_tam_p2");
     // The TAM envelope carries no total_results (unlike the search/jobs envelopes).
     expect((resp as Record<string, unknown>).total_results).toBeUndefined();
+  });
+
+  it("parses the fair_usage block every /v2 response carries", () => {
+    const resp = EmailEnrichmentResponse.parse(data.EMAIL_ENRICHMENT);
+    expect(resp.fair_usage?.records_used).toBe(3);
+    expect(resp.fair_usage?.records_remaining).toBe(9913547);
+    expect(resp.fair_usage?.next_reset_at).toBe("2026-09-29T10:25:23.155Z");
+    expect(resp.fair_usage?.rate_limit?.requests_per_second).toBe(100);
+    expect(resp.fair_usage?.rate_limit?.remaining_this_second).toBe(97);
+    expect(resp.fair_usage?.request_id).toBe("019bae09-0055-7441-b2ea-16086e499219");
+  });
+
+  it('parses an unlimited-plan fair_usage (records_remaining: "unlimited")', () => {
+    const resp = PeopleSearchResponse.parse({
+      ...data.PEOPLE_SEARCH,
+      fair_usage: { ...data.FAIR_USAGE, records_remaining: "unlimited", next_reset_at: null },
+    });
+    expect(resp.fair_usage?.records_remaining).toBe("unlimited");
+    expect(resp.fair_usage?.next_reset_at).toBeNull();
+  });
+
+  it("declares fair_usage on every /v2 response model", () => {
+    // The API attaches the block to every `/v2` endpoint; only the public
+    // `/changelog/` (a top-level array) is exempt.
+    const V2_RESPONSES = {
+      KeyInfo,
+      CurrentDateResponse,
+      PeopleSearchResponse,
+      CompanySearchResponse,
+      EmployeeFinderResponse,
+      WaterfallIcpResponse,
+      JobSearchResponse,
+      CompanyJobsResponse,
+      TamByJobsResponse,
+      EmailEnrichmentResponse,
+      PhoneEnrichmentResponse,
+      EmailToPersonResponse,
+      PhoneToPersonResponse,
+      CompanyEnrichmentResponse,
+      DomainToLinkedinResponse,
+      LinkedinToDomainResponse,
+      CompanyDistributionByCountryResponse,
+      CompanyDistributionByDepartmentResponse,
+    };
+    expect(Object.keys(V2_RESPONSES)).toHaveLength(18);
+    for (const [name, schema] of Object.entries(V2_RESPONSES)) {
+      expect(`${name}: ${Object.keys(schema.shape).includes("fair_usage")}`).toBe(`${name}: true`);
+    }
+  });
+
+  it("parses a response that omits fair_usage (older deployment)", () => {
+    const { fair_usage, ...without } = data.EMAIL_ENRICHMENT;
+    expect(fair_usage).toBeDefined();
+    expect(EmailEnrichmentResponse.parse(without).fair_usage).toBeUndefined();
   });
 
   it("parses the changelog as a top-level array", () => {

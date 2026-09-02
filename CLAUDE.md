@@ -14,8 +14,8 @@ changes — it records the design decisions so you don't re-derive them.
   examples and the OpenAPI spec at `https://api.blitz-api.ai/openapi`.
 - **Async-only.** One `BlitzAPI` class; methods return a `Promise` (or a `PagePromise`
   for the paginated lists). Uses the global `fetch` (overridable via the `fetch` option).
-- **Pagination** (`src/pagination.ts`): `search.people`/`companies` and
-  `jobs.search`/`company` (cursor) and
+- **Pagination** (`src/pagination.ts`): `search.people`/`companies`,
+  `jobs.search`/`company` and `company.tam_by_jobs` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` — `await` for the first `Page`
   (`.data` items, `.response` raw 1:1 body, `has_next_page()`/`get_next_page()`/`iter_pages()`),
   or `for await` to stream all items. Cursor stops on `cursor === null` (and throws on a
@@ -28,6 +28,10 @@ changes — it records the design decisions so you don't re-derive them.
   both files; commit both. CI drift guard `pnpm gen:enums:check` stays **offline**
   (renders from the committed cache — never fetches), so it never breaks on a
   network blip or an upstream change.
+- **`fair_usage`** — every `/v2` response carries the shared `FairUsage` block
+  (`shared.ts`), attached as `fair_usage: FairUsage.nullish()` on every envelope. A
+  new endpoint must declare it; `test/models.test.ts` asserts every `/v2` model does.
+  `MeteredValue` (`number | "unlimited"`) is the shared union for record/rate values.
 - Superset models with optional fields (`.nullish()` scalars, `blitzList(...)` for
   lists — coerces a missing **or `null`** value to `[]`), not per-endpoint duplicates.
   Numeric fields use `z.number().nullish()`. Use plain `.nullish()` only for a list the

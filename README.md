@@ -23,7 +23,7 @@ search, and enrichment.
 
 > **Billing.** Blitz bills **per result**. A bare `for await` over a search
 > streams every match up to the server-side limit (people: 50k results), which can be a
-> lot of credits. Bound spend with **`max_items`** (a client-side total cap, never sent
+> lot of records. Bound spend with **`max_items`** (a client-side total cap, never sent
 > on the wire) — details in [Pagination](#pagination).
 
 ## Contents
@@ -35,6 +35,7 @@ search, and enrichment.
 - [Endpoints](#endpoints)
 - [Pagination](#pagination)
 - [Configuration](#configuration)
+- [Usage & rate limit (`fair_usage`)](#usage--rate-limit-fair_usage)
 - [Error handling](#error-handling)
 - [Forward compatibility](#forward-compatibility)
 - [Development](#development)
@@ -58,7 +59,7 @@ const client = new BlitzAPI();
 
 // Health-check the key before a batch job.
 const info = await client.account.key_info();
-console.log(info.valid, info.remaining_credits, info.max_requests_per_seconds);
+console.log(info.valid, info.records_remaining, info.max_requests_per_seconds);
 
 // LinkedIn profile URL -> verified work email.
 const email = await client.enrichment.email({
@@ -88,7 +89,7 @@ const { BlitzAPI } = require("blitz-api-js");
 ## Example: find, enrich, collect
 
 A complete flow — find people, enrich each one's verified work email, collect the
-contacts. `max_items` caps the total fetched so the run can't surprise you with credits.
+contacts. `max_items` caps the total fetched so the run can't surprise you with records.
 
 ```ts
 import { BlitzAPI } from "blitz-api-js";
@@ -101,7 +102,7 @@ const leads = await client.search
     company: { industry: { include: ["Software Development"] } },
     people: { job_level: ["VP"] },
     max_results: 25,
-    max_items: 25, // client-side total cap — bounds credit spend
+    max_items: 25, // client-side total cap — bounds record spend
   })
   .collect();
 
@@ -191,8 +192,8 @@ instead of a plain response (see [Pagination](#pagination)). `waterfall_icp`,
 directly.
 
 `client.company.tam_by_jobs` builds a Total Addressable Market from live hiring signals
-— each result is a company plus how many of its current postings matched (1 credit per
-result). `client.changelog.list` returns the **public** API changelog (no credits, no
+— each result is a company plus how many of its current postings matched (1 record per
+result). `client.changelog.list` returns the **public** API changelog (no records, no
 key required, not paginated):
 
 ```ts
@@ -220,9 +221,9 @@ page or `for await` to stream every item across all pages — each page is fetch
 demand, through the client's rate limiter.
 
 > **`max_results` is the page size, not a total.** It's "results per page" (1–50), and
-> the API **bills 1 credit per result returned**. A bare `for await` streams *every*
+> the API **bills 1 record per result returned**. A bare `for await` streams *every*
 > match up to the server-side limit (people: 50k results / 1k pages; employee finder:
-> 10k; jobs: 5k), which can be a lot of credits. To bound it, pass **`max_items`** (a
+> 10k; jobs: 5k), which can be a lot of records. To bound it, pass **`max_items`** (a
 > client-side total cap — never sent on the wire), `break` out of the loop, or drive
 > pages manually.
 
@@ -292,6 +293,33 @@ bucket that admits at most `rate_limit_rps` requests per second, so a single cli
 stays under the limit on every endpoint, and a burst on one never throttles another. Across
 multiple processes you may still hit `429` — the retry path handles that.
 
+## Usage & rate limit (`fair_usage`)
+
+Every `/v2` response carries a `fair_usage` block reporting what the request cost
+and what is left, so you can meter a batch job without a second `key_info()` call:
+
+```ts
+const email = await client.enrichment.email({ person_linkedin_url: url });
+const usage = email.fair_usage;
+console.log(usage?.records_used);                    // records this request consumed
+console.log(usage?.records_remaining);               // number, or "unlimited"
+console.log(usage?.next_reset_at);                   // null on an unlimited plan
+console.log(usage?.rate_limit?.remaining_this_second);
+console.log(usage?.request_id);                      // quote this id to support
+```
+
+On a paginated method the block belongs to each page's raw body, so read it off
+`.response`:
+
+```ts
+const page = await client.search.people({ company: { /* … */ }, max_results: 50 });
+console.log(page.response.fair_usage?.records_used);
+```
+
+`rate_limit` is absent on `account.key_info()`, the one endpoint that is not rate
+limited. Every field is optional, so a response from a deployment that predates
+the block still parses.
+
 ## Error handling
 
 ```ts
@@ -302,7 +330,7 @@ import {
   APITimeoutError,
   AuthenticationError,
   BlitzError,
-  InsufficientCreditsError,
+  FairUsageLimitError,
   NotFoundError,
   RateLimitError,
   ServerError,
@@ -311,8 +339,8 @@ import {
 try {
   await client.enrichment.email({ person_linkedin_url: "..." });
 } catch (err) {
-  if (err instanceof InsufficientCreditsError) {
-    // 402 — out of credits
+  if (err instanceof FairUsageLimitError) {
+    // 402 — Fair Use record limit reached
   } else if (err instanceof AuthenticationError) {
     // 401 — bad key
   } else if (err instanceof APIResponseValidationError) {
@@ -324,6 +352,10 @@ try {
   }
 }
 ```
+
+`InsufficientCreditsError` is still exported as a **deprecated** alias for
+`FairUsageLimitError`. It is the same class, not a subclass, so existing `instanceof`
+checks keep working; it will be removed in a future major.
 
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
 `max_retries`; `401`/`402`/`404` throw immediately. A **pre-response** network

@@ -238,7 +238,7 @@ export interface JobCompanyFilter {
 export interface PeopleSearchParams {
   company?: CompanyFilter;
   people?: PeopleFilter;
-  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  /** Results **per page** (1–50). The API bills 1 record per result returned. */
   max_results?: number;
   cursor?: string;
   /**
@@ -251,7 +251,7 @@ export interface PeopleSearchParams {
 
 export interface CompanySearchParams {
   company?: CompanyFilter;
-  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  /** Results **per page** (1–50). The API bills 1 record per result returned. */
   max_results?: number;
   cursor?: string;
   /**
@@ -265,7 +265,7 @@ export interface CompanySearchParams {
 export interface JobSearchParams {
   job?: JobFilter;
   company?: JobCompanyFilter;
-  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  /** Results **per page** (1–50). The API bills 1 record per result returned. */
   max_results?: number;
   cursor?: string;
   /**
@@ -279,7 +279,7 @@ export interface JobSearchParams {
 export interface CompanyJobsParams {
   company_linkedin_url: string;
   job?: JobFilter;
-  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  /** Results **per page** (1–50). The API bills 1 record per result returned. */
   max_results?: number;
   cursor?: string;
   /**
@@ -293,16 +293,16 @@ export interface CompanyJobsParams {
 /**
  * Params for `company.tam_by_jobs` — build a Total Addressable Market of
  * companies from live hiring signals (each result is a company plus how many of
- * its current postings matched). Cursor-paginated. The API bills **1 credit per
+ * its current postings matched). Cursor-paginated. The API bills **1 record per
  * result returned** (up to `max_results`). Can raise `AuthenticationError` (401),
- * `InsufficientCreditsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
 export interface TamByJobsParams {
   /** Job-level filters plus `min_per_company` (see {@link TamJobFilter}). */
   job?: TamJobFilter;
   /** Company firmographics — the same block as `jobs.search` ({@link JobCompanyFilter}). */
   company?: JobCompanyFilter;
-  /** Results **per page** (1–50, default 10). The API bills 1 credit per result returned. */
+  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
   max_results?: number;
   cursor?: string;
   /**
@@ -321,7 +321,7 @@ export interface EmployeeFinderParams {
   job_level?: JobLevelValue[];
   job_function?: JobFunctionValue[];
   min_connections_count?: number;
-  /** Results **per page** (1–50). The API bills 1 credit per result returned. */
+  /** Results **per page** (1–50). The API bills 1 record per result returned. */
   max_results?: number;
   page?: number;
   /**
@@ -374,7 +374,7 @@ export interface CurrentDateParams {
 /**
  * Params for `changelog.list` — the public Blitz API changelog.
  *
- * The endpoint is **public** (no credits, and it works regardless of API-key
+ * The endpoint is **public** (no records, and it works regardless of API-key
  * validity) and **not paginated** — it returns a plain array, newest-first,
  * filtered by these query-string parameters.
  */

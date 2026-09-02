@@ -205,7 +205,7 @@ export class PagePromise<TItem, TResponse>
   /**
    * Stream every item into an array, honoring `max_items`. Convenience over a
    * `for await` loop; pair with `max_items` so an unbounded result set can't
-   * exhaust memory (or credits — the API bills per result returned).
+   * exhaust memory (or records — the API bills per result returned).
    */
   async collect(): Promise<TItem[]> {
     const items: TItem[] = [];

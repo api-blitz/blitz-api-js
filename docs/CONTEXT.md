@@ -15,7 +15,8 @@ B2B data / GTM REST API (people & company search, contact enrichment, utilities)
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
 behaves the same way over all 19 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
-when changing any endpoint.
+when changing any endpoint. (The `fair_usage` / `records_remaining` sync of
+2026-09-02 still needs mirroring in `blitz-api-py`.)
 
 Two design mandates:
 
@@ -35,8 +36,14 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 - **Rate limit**: 5 req/s **per endpoint** on all plans; your per-endpoint value in
   `key_info.max_requests_per_seconds`.
 - **OpenAPI**: 3.1.0, version `2.0.0`. All endpoints are `/v2/...`.
-- **Status conventions**: 401 invalid/missing key · 402 insufficient credits ·
+- **Status conventions**: 401 invalid/missing key · 402 Fair Use limit reached ·
   404 not found · 429 rate limited (wait 60s then retry) · 5xx server error.
+- **`fair_usage`**: every `/v2` response (and the `402` body) carries a per-request
+  usage block — `records_used`, `records_remaining` (`number | "unlimited"`),
+  `next_reset_at`, `rate_limit.{requests_per_second,remaining_this_second}`, and
+  `request_id`. `rate_limit` is absent on `key-info`, the one endpoint that is not
+  rate limited. Also mirrored in the `x-records-used`/`x-records-remaining` response
+  headers; the SDK reads neither header.
 
 ### Endpoint → method → response model (all 19)
 
@@ -123,7 +130,7 @@ deserialization between SDK releases.
   `page >= total_pages`. `waterfall_icp` is not paginated. The cursor/offset wiring
   lives in two factories (`make_cursor_page_promise`/`make_offset_page_promise`) so
   all four cursor methods share one path and the guard lives in one place.
-  - **`max_results` is page size, not a total** (the API bills 1 credit per result
+  - **`max_results` is page size, not a total** (the API bills 1 record per result
     returned), so `for await` streams every match up to the server limit. The six
     paginated methods therefore accept a client-side **`max_items`** total cap that
     bounds `for await`/`collect()` and stops fetching once reached. `max_items` is
@@ -188,15 +195,20 @@ BlitzError
 ├── APIConnectionError -> APITimeoutError      # request never completed
 ├── APIResponseValidationError                 # 2xx body not JSON / wrong shape; .status_code, .request_id, .cause
 └── APIStatusError                             # non-2xx; .status_code, .body, .message, .request_id
-    ├── AuthenticationError       # 401
-    ├── InsufficientCreditsError  # 402
-    ├── NotFoundError             # 404
-    ├── RateLimitError            # 429 (only after retries exhausted)
-    └── ServerError               # 5xx (only after retries exhausted)
+    ├── AuthenticationError  # 401
+    ├── FairUsageLimitError  # 402
+    ├── NotFoundError        # 404
+    ├── RateLimitError       # 429 (only after retries exhausted)
+    └── ServerError          # 5xx (only after retries exhausted)
 ```
 
 Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
 `error.name` is set per class via `new.target.name`.
+
+`InsufficientCreditsError` is a **deprecated alias** of `FairUsageLimitError`, bound to
+the same class object. Deliberately *not* a subclass: the client throws
+`FairUsageLimitError`, so a subclass would make `instanceof InsufficientCreditsError`
+false and break the very callers the alias exists for.
 
 ---
 
@@ -221,6 +233,12 @@ Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
   missing **or `null`** value to `[]`. Plain `z.array(x).default([])` only fills the
   default for `undefined`, so an explicit `null` would throw a `ZodError` and break
   deserialization — `blitzList` keeps a `null`-for-empty-list from doing so.
+- **`FairUsage` lives in `shared.ts`** and is added to every `/v2` response envelope
+  as `fair_usage: FairUsage.nullish()` — optional everywhere so a response from a
+  deployment that predates the block still parses. `MeteredValue`
+  (`number | "unlimited"`) is shared by `FairUsage.records_remaining`,
+  `KeyInfo.records_remaining`, and `KeyInfo.max_requests_per_seconds`. The public
+  `/changelog/` (a top-level array) is the one endpoint without the block.
 - **`specialties`** is the one list kept `.nullish()` (nullable, surfaces `null`
   rather than `[]`) because the API documents it as genuinely nullable.
 
@@ -261,6 +279,42 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-09-02** — Purged "credits" from the SDK's vocabulary; the API no longer uses the
+  word (the live spec has **zero** occurrences — endpoints document `Cost: 1 record per
+  result (max = max_results)` / `Cost: 0 records`, and usage is reported as
+  `records_used`/`records_remaining`). The exported `InsufficientCreditsError` is renamed
+  **`FairUsageLimitError`**, shipping **with** a deprecated `InsufficientCreditsError`
+  alias bound to the same class object (not a subclass — that would make `instanceof
+  InsufficientCreditsError` false for the error actually thrown), so the rename itself is
+  **not** breaking; the branch's major bump comes from `KeyInfo.remaining_credits` →
+  `records_remaining` instead. `FairUsageLimitError` rather than
+  `InsufficientRecordsError` because the API's own `402` body reads *"Fair Use limit
+  reached. Upgrade your plan at app.blitz-api.ai/billing…"*, and it pairs with the
+  `FairUsage` model; the 402 status mapping, base class, and attributes are unchanged.
+  `test/errors.test.ts` now asserts against that real message instead of an invented
+  one. Everything else was doc-comment and README prose ("1 credit per result" → "1
+  record per result", "credit balance" → "record balance", …). **Deliberately not
+  scrubbed:** the `"Credit Intermediation"` industry value in the generated
+  `enums.ts`/`enum-source.json` (real API enum data, and those files are never
+  hand-edited); the `remaining_credits` literal in the `models.test.ts` shape guard (it
+  names the *old API field*, so renaming it would disarm the assertion); and this
+  decision log, which records the old names on purpose. **Known drift:** `blitz-api-py`
+  still exports `InsufficientCreditsError` — being mirrored separately.
+- **2026-09-02** — Synced against the live spec after the upstream changes announced
+  on `GET /changelog/`. **(1) Breaking:** `KeyInfo.remaining_credits` →
+  **`records_remaining`** (API-side rename on 2026-09-01, aligning key-info with
+  `fair_usage.records_remaining` and the `x-records-remaining` header). Guarded by a
+  schema-shape assertion, since `blitzObject` would otherwise preserve the old raw key
+  and let a value-only test pass. **(2)** Every `/v2` response (and the `402` body)
+  now carries a **`fair_usage`** block; modeled once as `FairUsage` in `shared.ts` and
+  added as `fair_usage: FairUsage.nullish()` to all 18 envelopes — optional so an older
+  deployment's response still parses; a test asserts the field is declared on every
+  `/v2` model (`/changelog/`, a top-level array, is exempt). The previously
+  private `CreditValue` union became the shared, exported **`MeteredValue`**
+  (`number | "unlimited"`), now used by both `KeyInfo` and `FairUsage`. The companion
+  `x-credit-*` → `x-records-*` header rename is a no-op here: the SDK reads neither.
+  Also fixed a stale `TAM_BY_JOBS` cursor assertion in `models.test.ts` that had been
+  failing on `main`. Not yet mirrored in `blitz-api-py`.
 - **2026-08-13** — Added `company.tam_by_jobs()` (`POST /v2/company/tam-by-jobs`, cursor-paginated,
   new `client.company` namespace; the streamed item is a `{ company, matched_jobs }` match reusing
   shared `Company`, and the response carries **no `total_results`**; `min_per_company` via

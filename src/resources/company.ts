@@ -19,7 +19,7 @@ export class CompanyResource {
    *
    * Cursor-paginated — `for await (const match of …)` streams every
    * `{ company, matched_jobs }` across all pages, or `await` for the first page
-   * (`.data`, `.response`, `.has_next_page()`). The API bills **1 credit per
+   * (`.data`, `.response`, `.has_next_page()`). The API bills **1 record per
    * result returned**; bound spend with `max_items`.
    */
   tam_by_jobs(

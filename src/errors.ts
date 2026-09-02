@@ -6,11 +6,11 @@
  *   │   └── APITimeoutError
  *   ├── APIResponseValidationError  // a 2xx body was not valid JSON / not the expected shape
  *   └── APIStatusError              // a non-2xx HTTP response was received
- *       ├── AuthenticationError       // 401
- *       ├── InsufficientCreditsError  // 402
- *       ├── NotFoundError             // 404
- *       ├── RateLimitError            // 429 (after retries are exhausted)
- *       └── ServerError               // 5xx (after retries are exhausted)
+ *       ├── AuthenticationError  // 401
+ *       ├── FairUsageLimitError  // 402
+ *       ├── NotFoundError        // 404
+ *       ├── RateLimitError       // 429 (after retries are exhausted)
+ *       └── ServerError          // 5xx (after retries are exhausted)
  *
  * Catch `BlitzError` to handle anything this SDK raises.
  */
@@ -103,8 +103,18 @@ export class APIStatusError extends BlitzError {
 /** 401 — the API key is missing or invalid. */
 export class AuthenticationError extends APIStatusError {}
 
-/** 402 — the key is valid but the account is out of credits. */
-export class InsufficientCreditsError extends APIStatusError {}
+/** 402 — the key is valid but the plan's Fair Use record limit is reached. */
+export class FairUsageLimitError extends APIStatusError {}
+
+/**
+ * @deprecated Renamed to {@link FairUsageLimitError} — the API's `402` is a Fair Use
+ * record-limit response, and "credits" is no longer Blitz vocabulary. This is an alias
+ * for the same class (not a subclass), so existing `instanceof` checks keep working
+ * unchanged. It will be removed in a future major.
+ */
+export const InsufficientCreditsError = FairUsageLimitError;
+/** @deprecated Renamed to {@link FairUsageLimitError}. */
+export type InsufficientCreditsError = FairUsageLimitError;
 
 /** 404 — the API key or resource does not exist. */
 export class NotFoundError extends APIStatusError {}

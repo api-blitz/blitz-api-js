@@ -13,7 +13,7 @@ import {
   APIStatusError,
   type APIStatusErrorOptions,
   AuthenticationError,
-  InsufficientCreditsError,
+  FairUsageLimitError,
   NotFoundError,
   RateLimitError,
   ServerError,
@@ -61,7 +61,7 @@ export function build_headers(apiKey: string): Record<string, string> {
   };
 }
 
-/** Only 429 and 5xx are retried; 401/402/404 fail fast (no wasted credits/time). */
+/** Only 429 and 5xx are retried; 401/402/404 fail fast (no wasted records/time). */
 export function should_retry(statusCode: number): boolean {
   return statusCode === 429 || statusCode >= 500;
 }
@@ -90,7 +90,7 @@ type StatusErrorCtor = new (message: string, options: APIStatusErrorOptions) => 
 // APIStatusError (or ServerError for any 5xx).
 const STATUS_ERRORS: Record<number, StatusErrorCtor> = {
   401: AuthenticationError,
-  402: InsufficientCreditsError,
+  402: FairUsageLimitError,
   404: NotFoundError,
   429: RateLimitError,
 };
