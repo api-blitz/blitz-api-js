@@ -2,7 +2,7 @@
 
 import * as z from "zod";
 import { blitzList, blitzObject } from "./models.js";
-import { Location } from "./shared.js";
+import { FairUsage, Location } from "./shared.js";
 
 /**
  * A single job posting returned by `jobs.search` and `jobs.company`.
@@ -31,6 +31,8 @@ export const JobSearchResponse = blitzObject({
   results_length: z.number().nullish(),
   max_results: z.number().nullish(),
   cursor: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type JobSearchResponse = z.infer<typeof JobSearchResponse>;
 
@@ -41,5 +43,7 @@ export const CompanyJobsResponse = blitzObject({
   results_length: z.number().nullish(),
   max_results: z.number().nullish(),
   cursor: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type CompanyJobsResponse = z.infer<typeof CompanyJobsResponse>;

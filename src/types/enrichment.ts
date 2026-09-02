@@ -2,7 +2,7 @@
 
 import * as z from "zod";
 import { blitzList, blitzObject } from "./models.js";
-import { Company, Person } from "./shared.js";
+import { Company, FairUsage, Person } from "./shared.js";
 
 /** A single candidate email returned by `enrichment.email`. */
 export const EmailMatch = blitzObject({
@@ -18,6 +18,8 @@ export const EmailEnrichmentResponse = blitzObject({
   found: z.boolean().nullish(),
   email: z.string().nullish(),
   all_emails: blitzList(EmailMatch),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type EmailEnrichmentResponse = z.infer<typeof EmailEnrichmentResponse>;
 
@@ -25,6 +27,8 @@ export type EmailEnrichmentResponse = z.infer<typeof EmailEnrichmentResponse>;
 export const PhoneEnrichmentResponse = blitzObject({
   found: z.boolean().nullish(),
   phone: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type PhoneEnrichmentResponse = z.infer<typeof PhoneEnrichmentResponse>;
 
@@ -32,6 +36,8 @@ export type PhoneEnrichmentResponse = z.infer<typeof PhoneEnrichmentResponse>;
 export const EmailToPersonResponse = blitzObject({
   found: z.boolean().nullish(),
   person: Person.nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type EmailToPersonResponse = z.infer<typeof EmailToPersonResponse>;
 
@@ -39,6 +45,8 @@ export type EmailToPersonResponse = z.infer<typeof EmailToPersonResponse>;
 export const PhoneToPersonResponse = blitzObject({
   found: z.boolean().nullish(),
   person: Person.nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type PhoneToPersonResponse = z.infer<typeof PhoneToPersonResponse>;
 
@@ -46,6 +54,8 @@ export type PhoneToPersonResponse = z.infer<typeof PhoneToPersonResponse>;
 export const CompanyEnrichmentResponse = blitzObject({
   found: z.boolean().nullish(),
   company: Company.nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type CompanyEnrichmentResponse = z.infer<typeof CompanyEnrichmentResponse>;
 
@@ -63,6 +73,8 @@ export const DomainToLinkedinResponse = blitzObject({
   company_name: z.string().nullish(),
   // Runner-up matches when a domain resolves to more than one company.
   other: blitzList(DomainToLinkedinMatch),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type DomainToLinkedinResponse = z.infer<typeof DomainToLinkedinResponse>;
 
@@ -70,6 +82,8 @@ export type DomainToLinkedinResponse = z.infer<typeof DomainToLinkedinResponse>;
 export const LinkedinToDomainResponse = blitzObject({
   found: z.boolean().nullish(),
   email_domain: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type LinkedinToDomainResponse = z.infer<typeof LinkedinToDomainResponse>;
 
@@ -86,6 +100,8 @@ export const CompanyDistributionByCountryResponse = blitzObject({
   company_linkedin_url: z.string().nullish(),
   total_employees: z.number().nullish(),
   distribution: blitzList(CountryDistributionItem),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type CompanyDistributionByCountryResponse = z.infer<
   typeof CompanyDistributionByCountryResponse
@@ -104,6 +120,8 @@ export const CompanyDistributionByDepartmentResponse = blitzObject({
   company_linkedin_url: z.string().nullish(),
   total_employees: z.number().nullish(),
   distribution: blitzList(DepartmentDistributionItem),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type CompanyDistributionByDepartmentResponse = z.infer<
   typeof CompanyDistributionByDepartmentResponse

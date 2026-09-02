@@ -179,7 +179,7 @@ export class BlitzAPI {
     }
   }
 
-  /** Account: key validity, credits, and rate limit. */
+  /** Account: key validity, record balance, and rate limit. */
   get account(): AccountResource {
     this.#account ??= new AccountResource(this);
     return this.#account;

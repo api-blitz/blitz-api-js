@@ -16,7 +16,7 @@ export class ChangelogResource {
    * `deprecation` | `announcement`), a `title`, and optional `body`,
    * `affected_endpoints`, and `links`.
    *
-   * This endpoint is **public** — it costs no credits and works regardless of
+   * This endpoint is **public** — it costs no records and works regardless of
    * API-key validity (the SDK still sends the key header, which the endpoint
    * ignores). It is **not paginated**: it returns a plain array filtered by
    * `days` / `limit`.

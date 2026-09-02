@@ -8,10 +8,15 @@ import {
   AuthenticationError,
   BlitzAPI,
   BlitzError,
+  FairUsageLimitError,
   InsufficientCreditsError,
   NotFoundError,
 } from "../src/index.js";
 import { FakeFetch, jsonResponse, textResponse } from "./helpers/clock.js";
+
+// The 402 body the API actually sends (the `example` on every /v2 402 response).
+const FAIR_USE_MESSAGE =
+  "Fair Use limit reached. Upgrade your plan at app.blitz-api.ai/billing or contact support to increase your monthly capacity.";
 
 function client(fetch: typeof globalThis.fetch): BlitzAPI {
   return new BlitzAPI({ api_key: "k", rate_limit_rps: null, max_retries: 0, fetch });
@@ -20,7 +25,7 @@ function client(fetch: typeof globalThis.fetch): BlitzAPI {
 describe("status errors", () => {
   it.each([
     [401, AuthenticationError],
-    [402, InsufficientCreditsError],
+    [402, FairUsageLimitError],
     [404, NotFoundError],
     [400, APIStatusError],
     [418, APIStatusError],
@@ -37,19 +42,30 @@ describe("status errors", () => {
   it("carries status, body, message, and request id", async () => {
     const ff = new FakeFetch([
       jsonResponse(
-        { message: "Insufficient credits balance" },
+        { message: FAIR_USE_MESSAGE },
         { status: 402, headers: { "x-request-id": "req_123" } },
       ),
     ]);
     const error = await client(ff.fetch)
       .account.key_info()
       .catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(InsufficientCreditsError);
-    const err = error as InsufficientCreditsError;
+    expect(error).toBeInstanceOf(FairUsageLimitError);
+    const err = error as FairUsageLimitError;
     expect(err.status_code).toBe(402);
-    expect(err.message).toBe("Insufficient credits balance");
-    expect(err.body).toEqual({ message: "Insufficient credits balance" });
+    expect(err.message).toBe(FAIR_USE_MESSAGE);
+    expect(err.body).toEqual({ message: FAIR_USE_MESSAGE });
     expect(err.request_id).toBe("req_123");
+  });
+
+  it("still matches the deprecated InsufficientCreditsError alias", async () => {
+    // The alias must stay the *same class object* — a subclass would silently make
+    // `instanceof InsufficientCreditsError` false for the error the client throws.
+    expect(InsufficientCreditsError).toBe(FairUsageLimitError);
+    const ff = new FakeFetch([jsonResponse({ message: FAIR_USE_MESSAGE }, { status: 402 })]);
+    const error = await client(ff.fetch)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InsufficientCreditsError);
   });
 
   it("falls back to a synthetic message when the body has none", async () => {

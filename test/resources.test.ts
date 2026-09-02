@@ -93,6 +93,8 @@ describe("resources", () => {
 
     expect(page.data[0]?.full_name).toBe("Beulah Lee");
     expect(page.response.total_results).toBe(14337505);
+    // On a paginated method fair_usage belongs to each page's raw body.
+    expect(page.response.fair_usage?.records_used).toBe(3);
     expect(body).toEqual({
       company: { industry: { include: ["Software Development"] } },
       people: {

@@ -109,3 +109,45 @@ export const Company = blitzObject({
   website: z.string().nullish(),
 });
 export type Company = z.infer<typeof Company>;
+
+// ---------------------------------------------------------------------------
+// Fair usage — the per-request usage/limit block every `/v2` response carries.
+// ---------------------------------------------------------------------------
+
+/**
+ * A metered value that is a number on capped plans and the literal `"unlimited"`
+ * on unlimited plans. The API returns either, so both must parse.
+ */
+export const MeteredValue = z.union([z.number(), z.literal("unlimited")]).nullish();
+export type MeteredValue = z.infer<typeof MeteredValue>;
+
+/** Request-rate counters inside {@link FairUsage}. */
+export const FairUsageRateLimit = blitzObject({
+  /** Requests this API key may send per second. */
+  requests_per_second: z.number().nullish(),
+  /** Requests left in the current one-second window. */
+  remaining_this_second: z.number().nullish(),
+});
+export type FairUsageRateLimit = z.infer<typeof FairUsageRateLimit>;
+
+/**
+ * Record usage, rate limit, and tracing data for the request that returned it.
+ *
+ * The API attaches this block to every `/v2` response (and to the `402`
+ * insufficient-balance error body). It is optional on every model so a response
+ * from a deployment that predates it still parses — the same forward-compatible
+ * posture as {@link blitzObject}.
+ */
+export const FairUsage = blitzObject({
+  /** Records this request consumed, after reconciliation against the results actually returned. */
+  records_used: z.number().nullish(),
+  /** Records left on the plan after this request. */
+  records_remaining: MeteredValue,
+  /** When the record balance resets. `null` on an unlimited plan. */
+  next_reset_at: z.string().nullish(),
+  /** Absent on endpoints that are not rate limited (`account.key_info`). */
+  rate_limit: FairUsageRateLimit.nullish(),
+  /** Quote this id when you contact support. */
+  request_id: z.string().nullish(),
+});
+export type FairUsage = z.infer<typeof FairUsage>;

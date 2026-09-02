@@ -10,7 +10,7 @@ export class AccountResource {
   constructor(private readonly client: BlitzAPI) {}
 
   /**
-   * Check the API key's validity, credit balance, and rate limit.
+   * Check the API key's validity, record balance, and rate limit.
    * A cheap health check to run before a batch job.
    */
   key_info(options?: RequestOptions): Promise<KeyInfo> {

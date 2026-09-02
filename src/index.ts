@@ -24,6 +24,7 @@ export {
   APITimeoutError,
   AuthenticationError,
   BlitzError,
+  FairUsageLimitError,
   InsufficientCreditsError,
   NotFoundError,
   RateLimitError,

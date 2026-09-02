@@ -74,16 +74,37 @@ const COMPANY = {
   website: "https://www.google.com",
 };
 
+/**
+ * The `fair_usage` block the API attaches to every `/v2` response. Spread into
+ * the fixtures below so the models are exercised against the real envelope.
+ */
+export const FAIR_USAGE = {
+  records_used: 3,
+  records_remaining: 9913547,
+  next_reset_at: "2026-09-29T10:25:23.155Z",
+  rate_limit: { requests_per_second: 100, remaining_this_second: 97 },
+  request_id: "019bae09-0055-7441-b2ea-16086e499219",
+};
+
+/** `account.key-info` is the one endpoint that is not rate limited, so it omits `rate_limit`. */
+export const FAIR_USAGE_NO_RATE_LIMIT = {
+  records_used: 0,
+  records_remaining: 9913547,
+  next_reset_at: "2026-09-29T10:25:23.155Z",
+  request_id: "019bae09-0055-7441-b2ea-16086e499219",
+};
+
 export const KEY_INFO = {
   valid: true,
   id: "key_abc123",
-  remaining_credits: 99.5,
+  records_remaining: 99.5,
   next_reset_at: "2026-02-12T17:48:25.199Z",
   max_requests_per_seconds: 5,
   allowed_apis: ["/enrichment/email", "/search/people"],
   active_plans: [
     { name: "Unlimited Leads", status: "active", started_at: "2026-01-12T17:48:25.200Z" },
   ],
+  fair_usage: FAIR_USAGE_NO_RATE_LIMIT,
 };
 
 export const PEOPLE_SEARCH = {
@@ -92,6 +113,7 @@ export const PEOPLE_SEARCH = {
   results_length: 1,
   max_results: 1,
   cursor: "example_cursor_people_p2",
+  fair_usage: FAIR_USAGE,
 };
 
 export const COMPANY_SEARCH = {
@@ -156,6 +178,7 @@ export const EMAIL_ENRICHMENT = {
       email_domain: "blitz-agency.com",
     },
   ],
+  fair_usage: FAIR_USAGE,
 };
 
 export const PHONE_ENRICHMENT = { found: true, phone: "+1234567890" };
@@ -178,11 +201,11 @@ export const DOMAIN_TO_LINKEDIN = {
   ],
 };
 
-/** An unlimited-plan key: credit fields come back as the literal `"unlimited"`. */
+/** An unlimited-plan key: metered fields come back as the literal `"unlimited"`. */
 export const KEY_INFO_UNLIMITED = {
   valid: true,
   id: "key_unlimited",
-  remaining_credits: "unlimited",
+  records_remaining: "unlimited",
   max_requests_per_seconds: "unlimited",
   allowed_apis: ["/search/people"],
   active_plans: [{ name: "Unlimited", status: "active" }],

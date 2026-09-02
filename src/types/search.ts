@@ -2,7 +2,7 @@
 
 import * as z from "zod";
 import { blitzList, blitzObject } from "./models.js";
-import { Company, Person } from "./shared.js";
+import { Company, FairUsage, Person } from "./shared.js";
 
 /** Cursor-paginated result of `search.people`. */
 export const PeopleSearchResponse = blitzObject({
@@ -11,6 +11,8 @@ export const PeopleSearchResponse = blitzObject({
   results_length: z.number().nullish(),
   max_results: z.number().nullish(),
   cursor: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type PeopleSearchResponse = z.infer<typeof PeopleSearchResponse>;
 
@@ -21,6 +23,8 @@ export const CompanySearchResponse = blitzObject({
   results_length: z.number().nullish(),
   max_results: z.number().nullish(),
   cursor: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type CompanySearchResponse = z.infer<typeof CompanySearchResponse>;
 
@@ -32,6 +36,8 @@ export const EmployeeFinderResponse = blitzObject({
   page: z.number().nullish(),
   total_pages: z.number().nullish(),
   results: blitzList(Person),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type EmployeeFinderResponse = z.infer<typeof EmployeeFinderResponse>;
 
@@ -54,5 +60,7 @@ export const WaterfallIcpResponse = blitzObject({
   max_results: z.number().nullish(),
   results_length: z.number().nullish(),
   results: blitzList(WaterfallIcpMatch),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type WaterfallIcpResponse = z.infer<typeof WaterfallIcpResponse>;

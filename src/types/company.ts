@@ -2,7 +2,7 @@
 
 import * as z from "zod";
 import { blitzList, blitzObject } from "./models.js";
-import { Company } from "./shared.js";
+import { Company, FairUsage } from "./shared.js";
 
 /**
  * One `company.tam_by_jobs` match: a company plus how many of its live job
@@ -26,5 +26,7 @@ export const TamByJobsResponse = blitzObject({
   results_length: z.number().nullish(),
   max_results: z.number().nullish(),
   cursor: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
 });
 export type TamByJobsResponse = z.infer<typeof TamByJobsResponse>;
