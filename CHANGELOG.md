@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/api-blitz/blitz-api-js/compare/v1.2.0...v2.0.0) (2026-09-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* `KeyInfo.remaining_credits` is now `KeyInfo.records_remaining`. Read `info.records_remaining` instead. The `InsufficientCreditsError` rename is not breaking — the old name stays exported as a deprecated alias.
+
+### Features
+
+* sync with the live spec — fair_usage block, records vocabulary ([55d39c2](https://github.com/api-blitz/blitz-api-js/commit/55d39c2fd8645b9fc0d58965efbcb8829f0c897e))
+
 ## [1.2.0](https://github.com/api-blitz/blitz-api-js/compare/v1.1.0...v1.2.0) (2026-08-13)
 
 
