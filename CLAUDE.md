@@ -8,14 +8,17 @@ changes — it records the design decisions so you don't re-derive them.
 - **snake_case everywhere** on the public surface — method names, parameter-object
   keys, constructor options, and response keys — to match the API and the Python
   SDK 1:1. Do not "camelCase-ify". Biome's `useNamingConvention` is intentionally off.
-- **Responses are hand-written Zod schemas**, never generated. The spec's responses
-  are example-only. Build schemas with `blitzObject` (= `z.looseObject`) so unknown
-  fields are preserved (forward-compat). Verify shapes against the public docs
-  examples and the OpenAPI spec at `https://api.blitz-api.ai/openapi`.
+- **Responses are hand-written Zod schemas**, never generated — even though the
+  runtime spec now publishes real response `properties` (since 2026-09-15; see
+  `docs/CONTEXT.md` §3 for why the decision stands). Build schemas with `blitzObject`
+  (= `z.looseObject`) so unknown fields are preserved (forward-compat). Verify shapes
+  against the runtime spec `https://api.blitz-api.ai/openapi` (typed responses) and
+  the docs mirror `https://docs.blitz-api.ai/api-reference/v2.openapi.json` (example
+  payloads). Start any sync at `GET https://api.blitz-api.ai/changelog/`.
 - **Async-only.** One `BlitzAPI` class; methods return a `Promise` (or a `PagePromise`
   for the paginated lists). Uses the global `fetch` (overridable via the `fetch` option).
 - **Pagination** (`src/pagination.ts`): `search.people`/`companies`,
-  `jobs.search`/`company` and `company.tam_by_jobs` (cursor) and
+  `jobs.search`/`company` and `company.tam_by_jobs`/`tam_by_people` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` — `await` for the first `Page`
   (`.data` items, `.response` raw 1:1 body, `has_next_page()`/`get_next_page()`/`iter_pages()`),
   or `for await` to stream all items. Cursor stops on `cursor === null` (and throws on a
@@ -36,6 +39,9 @@ changes — it records the design decisions so you don't re-derive them.
   lists — coerces a missing **or `null`** value to `[]`), not per-endpoint duplicates.
   Numeric fields use `z.number().nullish()`. Use plain `.nullish()` only for a list the
   API documents as genuinely nullable (e.g. `Company.specialties`).
+- **Request-side list caps are documented, not enforced.** The API rejects a filter list
+  over 50 entries (`cascade`: 10) with a `422`; say so in the interface doc comment and
+  let the server enforce it.
 
 ## Commands
 
@@ -45,8 +51,9 @@ pnpm lint && pnpm typecheck && pnpm gen:enums:check && pnpm test && pnpm build
 
 ## Adding / changing an endpoint
 
-1. Get the request schema + a response example from the public docs / OpenAPI spec
-   (`https://api.blitz-api.ai/openapi`).
+1. Get the request + response schema from the runtime spec
+   (`https://api.blitz-api.ai/openapi`) and an example payload from the docs mirror
+   (`https://docs.blitz-api.ai/api-reference/v2.openapi.json`).
 2. Request types → add/extend an interface in `src/types/filters.ts` (snake_case).
 3. Response model → add a `blitzObject` schema in the right `src/types/<group>.ts`,
    reusing `shared.ts` models; export it from `src/types/index.ts`.

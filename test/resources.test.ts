@@ -10,6 +10,7 @@ import {
   CompanyEnrichmentResponse,
   CurrentDateResponse,
   EmailEnrichmentResponse,
+  PersonEnrichmentResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
 import * as data from "./data.js";
@@ -86,7 +87,7 @@ describe("resources", () => {
       people: {
         job_level: ["VP"],
         job_title: { include: ["Engineer"] },
-        linkedin_url: ["https://www.linkedin.com/in/example"],
+        education: { include: ["Stanford University"] },
       },
       max_results: 5,
     });
@@ -100,7 +101,7 @@ describe("resources", () => {
       people: {
         job_level: ["VP"],
         job_title: { include: ["Engineer"] },
-        linkedin_url: ["https://www.linkedin.com/in/example"],
+        education: { include: ["Stanford University"] },
       },
       max_results: 5,
     });
@@ -254,6 +255,56 @@ describe("resources", () => {
     });
     expect(body).not.toHaveProperty("cursor");
     expect(body).not.toHaveProperty("max_items");
+  });
+
+  it("company.tam_by_people posts company+people filters, no cursor/max_items on the wire", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/company/tam-by-people`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.TAM_BY_PEOPLE);
+      }),
+    );
+    const page = await client().company.tam_by_people({
+      company: { industry: { include: ["Software Development"] } },
+      people: {
+        job_title: { include: ["Head of Sales"] },
+        linkedin_url: ["https://www.linkedin.com/in/example"],
+        min_per_company: 3,
+      },
+      max_results: 10,
+      max_items: 50,
+    });
+    expect(page.data[0]?.matched_people).toBe(42);
+    expect(page.data[0]?.company?.name).toBe("Google");
+    expect(body).toEqual({
+      company: { industry: { include: ["Software Development"] } },
+      people: {
+        job_title: { include: ["Head of Sales"] },
+        linkedin_url: ["https://www.linkedin.com/in/example"],
+        min_per_company: 3,
+      },
+      max_results: 10,
+    });
+    expect(body).not.toHaveProperty("cursor");
+    expect(body).not.toHaveProperty("max_items");
+  });
+
+  it("enrichment.person posts the person_linkedin_url body", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/enrichment/person`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.PERSON_ENRICHMENT);
+      }),
+    );
+    const result = await client().enrichment.person({
+      person_linkedin_url: "https://www.linkedin.com/in/example",
+    });
+    expect(PersonEnrichmentResponse.parse(result)).toEqual(result);
+    expect(result.person?.full_name).toBe("Beulah Lee");
+    expect(result.person?.experiences).toHaveLength(1);
+    expect(body).toEqual({ person_linkedin_url: "https://www.linkedin.com/in/example" });
   });
 
   it("changelog.list issues a public GET and serializes query params", async () => {

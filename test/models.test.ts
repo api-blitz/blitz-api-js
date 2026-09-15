@@ -18,9 +18,11 @@ import {
   KeyInfo,
   LinkedinToDomainResponse,
   PeopleSearchResponse,
+  PersonEnrichmentResponse,
   PhoneEnrichmentResponse,
   PhoneToPersonResponse,
   TamByJobsResponse,
+  TamByPeopleResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
 import * as data from "./data.js";
@@ -56,16 +58,20 @@ describe("response models", () => {
     expect(person?.location?.country_code).toBe("US");
     expect(person?.experiences[0]?.company_name).toBe("Google");
     expect(person?.experiences[0]?.job_location?.city).toBe("Sunnyvale");
-    expect(person?.education[0]?.degree).toBe("Bachelor's degree");
+    expect(person?.experiences[0]?.job_contract_type).toBe("Full-time");
+    expect(person?.experiences[0]?.job_work_arrangement).toBe("Hybrid");
+    expect(person?.location?.postal_code).toBe("94089");
+    expect(person?.location?.street_address).toBe("1600 Amphitheatre Parkway");
+    // `degree` carries the field of study; the API removed `field_of_study` on 2026-09-15.
+    expect(person?.education[0]?.degree).toBe("Bachelor of Science, Computer Science");
     expect(person?.education[0]?.school_name).toBe("Stanford University");
-    expect(person?.education[0]?.field_of_study).toBe("Computer Science");
     expect(person?.certifications[0]?.authority).toBe("Google");
     // Guard the field names on the schema itself: `blitzObject` preserves unknown keys,
-    // so a value assertion alone would still pass if `school_name` regressed to `school`.
+    // so a value assertion alone would still pass if `school_name` regressed to `school`
+    // or if the dropped `field_of_study` crept back in.
     expect(Object.keys(Education.shape).sort()).toEqual([
       "degree",
       "end_date",
-      "field_of_study",
       "school_name",
       "start_date",
     ]);
@@ -78,6 +84,9 @@ describe("response models", () => {
     expect(company?.linkedin_id).toBe(1441);
     expect(company?.hq?.region).toBe("NORAM");
     expect(company?.specialties).toEqual(["search", "cloud"]);
+    expect(company?.slogan).toBe("Organize the world's information");
+    expect(company?.revenue).toBe(350000000000);
+    expect(company?.employee_growth[0]).toEqual({ percentage: 12.5, timespan: "1 year" });
   });
 
   it("parses job search with a nested job", () => {
@@ -184,6 +193,30 @@ describe("response models", () => {
     expect((resp as Record<string, unknown>).total_results).toBeUndefined();
   });
 
+  it("parses person enrichment (whole career on the nested person)", () => {
+    const resp = PersonEnrichmentResponse.parse(data.PERSON_ENRICHMENT);
+    expect(resp.found).toBe(true);
+    expect(resp.person?.linkedin_url).toBe("https://www.linkedin.com/in/beulah-lee");
+    expect(resp.person?.experiences[0]?.job_title).toBe("Software Engineer");
+    expect(resp.person?.skills).toEqual(["python"]);
+  });
+
+  it("parses a person-enrichment miss (found: false, person: null)", () => {
+    const resp = PersonEnrichmentResponse.parse(data.PERSON_ENRICHMENT_NOT_FOUND);
+    expect(resp.found).toBe(false);
+    expect(resp.person).toBeNull();
+    expect(resp.fair_usage?.records_used).toBe(0);
+  });
+
+  it("parses tam by people (a company + matched_people, no total_results)", () => {
+    const resp = TamByPeopleResponse.parse(data.TAM_BY_PEOPLE);
+    expect(resp.results[0]?.matched_people).toBe(42);
+    expect(resp.results[0]?.company?.name).toBe("Google");
+    expect(resp.cursor).toBe("example_cursor_tam_people_p2");
+    // Like the TAM-by-jobs envelope, this one carries no total_results.
+    expect((resp as Record<string, unknown>).total_results).toBeUndefined();
+  });
+
   it("parses the fair_usage block every /v2 response carries", () => {
     const resp = EmailEnrichmentResponse.parse(data.EMAIL_ENRICHMENT);
     expect(resp.fair_usage?.records_used).toBe(3);
@@ -216,6 +249,8 @@ describe("response models", () => {
       JobSearchResponse,
       CompanyJobsResponse,
       TamByJobsResponse,
+      TamByPeopleResponse,
+      PersonEnrichmentResponse,
       EmailEnrichmentResponse,
       PhoneEnrichmentResponse,
       EmailToPersonResponse,
@@ -226,7 +261,7 @@ describe("response models", () => {
       CompanyDistributionByCountryResponse,
       CompanyDistributionByDepartmentResponse,
     };
-    expect(Object.keys(V2_RESPONSES)).toHaveLength(18);
+    expect(Object.keys(V2_RESPONSES)).toHaveLength(20);
     for (const [name, schema] of Object.entries(V2_RESPONSES)) {
       expect(`${name}: ${Object.keys(schema.shape).includes("fair_usage")}`).toBe(`${name}: true`);
     }

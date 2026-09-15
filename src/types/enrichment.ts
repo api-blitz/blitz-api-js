@@ -4,6 +4,22 @@ import * as z from "zod";
 import { blitzList, blitzObject } from "./models.js";
 import { Company, FairUsage, Person } from "./shared.js";
 
+/**
+ * Result of `enrichment.person` (LinkedIn profile URL -> full profile).
+ *
+ * On `found: false`, `person` is `null` and no record is charged. On
+ * `found: true`, `person` carries the person's **whole career** in
+ * `experiences[]` (profile order), plus `education`, `skills`, and
+ * `certifications`.
+ */
+export const PersonEnrichmentResponse = blitzObject({
+  found: z.boolean().nullish(),
+  person: Person.nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
+});
+export type PersonEnrichmentResponse = z.infer<typeof PersonEnrichmentResponse>;
+
 /** A single candidate email returned by `enrichment.email`. */
 export const EmailMatch = blitzObject({
   email: z.string().nullish(),

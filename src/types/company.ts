@@ -30,3 +30,31 @@ export const TamByJobsResponse = blitzObject({
   fair_usage: FairUsage.nullish(),
 });
 export type TamByJobsResponse = z.infer<typeof TamByJobsResponse>;
+
+/**
+ * One `company.tam_by_people` match: a company plus how many of its current
+ * employees matched the filters. `matched_people` is the count on this company
+ * (it respects the request's `people.min_per_company` floor). `company` reuses
+ * the shared {@link Company} model.
+ */
+export const TamByPeopleMatch = blitzObject({
+  company: Company.nullish(),
+  matched_people: z.number().nullish(),
+});
+export type TamByPeopleMatch = z.infer<typeof TamByPeopleMatch>;
+
+/**
+ * Cursor-paginated result of `company.tam_by_people`. Like
+ * {@link TamByJobsResponse} it carries **no `total_results`** (the spec omits
+ * it); iterate until `cursor` is `null`. `results` is a list of
+ * {@link TamByPeopleMatch}.
+ */
+export const TamByPeopleResponse = blitzObject({
+  results: blitzList(TamByPeopleMatch),
+  results_length: z.number().nullish(),
+  max_results: z.number().nullish(),
+  cursor: z.string().nullish(),
+  /** Record usage, rate limit, and tracing data for this request. */
+  fair_usage: FairUsage.nullish(),
+});
+export type TamByPeopleResponse = z.infer<typeof TamByPeopleResponse>;

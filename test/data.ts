@@ -10,17 +10,21 @@ const PERSON = {
   full_name: "Beulah Lee",
   nickname: null,
   civility_title: null,
-  headline: "Software Engineer at Google",
+  // Built from the first position as `<job title> | @<employer>` since 2026-09-15.
+  headline: "Software Engineer | @Google",
   about_me: "Motivated engineer.",
   location: {
     city: "Sunnyvale",
     state_code: "CA",
     country_code: "US",
     continent: "North America",
+    postal_code: "94089",
+    street_address: "1600 Amphitheatre Parkway",
   },
   linkedin_url: "https://www.linkedin.com/in/beulah-lee",
   connections_count: 500,
-  profile_picture_url: "https://media.licdn.com/dms/image/v2/photo",
+  // Always `null` since 2026-09-15; the field is still returned.
+  profile_picture_url: null,
   experiences: [
     {
       company_name: "Google",
@@ -32,14 +36,17 @@ const PERSON = {
       job_start_date: "2025-04-01",
       job_end_date: null,
       job_is_current: true,
+      job_contract_type: "Full-time",
+      job_work_arrangement: "Hybrid",
       job_location: { city: "Sunnyvale", state_code: "CA", country_code: "US" },
     },
   ],
   education: [
     {
+      // `degree` carries the field of study; the separate `field_of_study`
+      // field was removed from the API on 2026-09-15.
       school_name: "Stanford University",
-      degree: "Bachelor's degree",
-      field_of_study: "Computer Science",
+      degree: "Bachelor of Science, Computer Science",
       start_date: "2019-01-01",
       end_date: "2023-01-01",
     },
@@ -72,6 +79,9 @@ const COMPANY = {
   },
   domain: "google.com",
   website: "https://www.google.com",
+  slogan: "Organize the world's information",
+  revenue: 350000000000,
+  employee_growth: [{ percentage: 12.5, timespan: "1 year" }],
 };
 
 /**
@@ -183,6 +193,16 @@ export const EMAIL_ENRICHMENT = {
 
 export const PHONE_ENRICHMENT = { found: true, phone: "+1234567890" };
 
+/** `enrichment.person`: a LinkedIn profile URL resolved to the whole career. */
+export const PERSON_ENRICHMENT = { found: true, person: PERSON, fair_usage: FAIR_USAGE };
+
+/** A miss costs no record and returns a null person. */
+export const PERSON_ENRICHMENT_NOT_FOUND = {
+  found: false,
+  person: null,
+  fair_usage: { ...FAIR_USAGE, records_used: 0 },
+};
+
 export const EMAIL_TO_PERSON = { found: true, person: PERSON };
 
 export const PHONE_TO_PERSON = { found: true, person: PERSON };
@@ -244,6 +264,17 @@ export const TAM_BY_JOBS = {
   results_length: 1,
   max_results: 1,
   cursor: "example_cursor_tam_p2",
+};
+
+/**
+ * Cursor-paginated result of `company.tam_by_people` (a company +
+ * matched_people, no total_results).
+ */
+export const TAM_BY_PEOPLE = {
+  results: [{ company: COMPANY, matched_people: 42 }],
+  results_length: 1,
+  max_results: 1,
+  cursor: "example_cursor_tam_people_p2",
 };
 
 /** Public changelog: a top-level array of entries, newest-first. */

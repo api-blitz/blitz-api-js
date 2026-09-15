@@ -13,10 +13,11 @@
 The official **typed TypeScript SDK for the Blitz API** (https://blitz-api.ai), a
 B2B data / GTM REST API (people & company search, contact enrichment, utilities).
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
-behaves the same way over all 19 endpoints. `blitz-api-py` covers the same
+behaves the same way over all 21 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
 when changing any endpoint. (The `fair_usage` / `records_remaining` sync of
-2026-09-02 still needs mirroring in `blitz-api-py`.)
+2026-09-02 and the 2026-09-15 spec sync both still need mirroring in
+`blitz-api-py`.)
 
 Two design mandates:
 
@@ -33,9 +34,15 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 
 - **Base URL**: `https://api.blitz-api.ai`
 - **Auth**: `x-api-key` HTTP header (NOT `Authorization`).
-- **Rate limit**: 5 req/s **per endpoint** on all plans; your per-endpoint value in
-  `key_info.max_requests_per_seconds`.
-- **OpenAPI**: 3.1.0, version `2.0.0`. All endpoints are `/v2/...`.
+- **Rate limit**: 10 req/s **per endpoint** on all plans (legacy plans created before
+  2026-09-30 run at 50); your per-endpoint value in
+  `key_info.max_requests_per_seconds`. The SDK's `rate_limit_rps` default stays **5**,
+  deliberately half the cap.
+- **OpenAPI**: 3.1.0. The live runtime spec (`https://api.blitz-api.ai/openapi`)
+  reports `info.version` `1.0.0`; the docs-site mirror
+  (`https://docs.blitz-api.ai/api-reference/v2.openapi.json`) reports `2.0.0`. They
+  describe the same endpoints — see §3 for which to use for what. All endpoints are
+  `/v2/...` (plus the public `/changelog/`).
 - **Status conventions**: 401 invalid/missing key · 402 Fair Use limit reached ·
   404 not found · 429 rate limited (wait 60s then retry) · 5xx server error.
 - **`fair_usage`**: every `/v2` response (and the `402` body) carries a per-request
@@ -45,7 +52,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   rate limited. Also mirrored in the `x-records-used`/`x-records-remaining` response
   headers; the SDK reads neither header.
 
-### Endpoint → method → response model (all 19)
+### Endpoint → method → response model (all 21)
 
 | HTTP | Path | SDK method | Response model |
 | --- | --- | --- | --- |
@@ -57,6 +64,8 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/jobs/search` | `jobs.search()` | `JobSearchResponse` |
 | POST | `/v2/jobs/company` | `jobs.company()` | `CompanyJobsResponse` |
 | POST | `/v2/company/tam-by-jobs` | `company.tam_by_jobs()` | `TamByJobsResponse` |
+| POST | `/v2/company/tam-by-people` | `company.tam_by_people()` | `TamByPeopleResponse` |
+| POST | `/v2/enrichment/person` | `enrichment.person()` | `PersonEnrichmentResponse` |
 | POST | `/v2/enrichment/email` | `enrichment.email()` | `EmailEnrichmentResponse` |
 | POST | `/v2/enrichment/phone` | `enrichment.phone()` | `PhoneEnrichmentResponse` |
 | POST | `/v2/enrichment/email-to-person` | `enrichment.email_to_person()` | `EmailToPersonResponse` |
@@ -71,22 +80,35 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 
 ### Re-deriving the API surface
 
-The full spec/docs are public: fetch the OpenAPI spec from
-`https://api.blitz-api.ai/openapi` and use `jq` against it for request schemas and
-response `example` blocks. The `.md` mirror of any docs page is at
-`https://docs.blitz-api.ai/<path>.md`.
+Everything is public, and there are **two** specs plus a changelog feed — use each
+for what it is actually good at:
+
+| Source | Use it for |
+| --- | --- |
+| `https://api.blitz-api.ai/openapi` (runtime) | **Request schemas and, since 2026-09-15, fully typed response `properties`** — the authority for field names/types/required-ness. Also what `pnpm gen:enums:fetch` pulls. |
+| `https://docs.blitz-api.ai/api-reference/v2.openapi.json` (docs mirror) | **Response `example` payloads** (its responses are still example-only) and prose descriptions/costs. Good source for test fixtures. |
+| `GET https://api.blitz-api.ai/changelog/` | What *changed* and when, with `affected_endpoints`. Start a sync here — it names the breaking changes. |
+
+The `.md` mirror of any docs page is at `https://docs.blitz-api.ai/<path>.md`, and
+the page index is `https://docs.blitz-api.ai/llms.txt`.
 
 ---
 
 ## 3. THE crux: why response models are hand-written
 
-The spec's **request** bodies are richly typed (nested objects, enums) — modeled
-precisely as TypeScript interfaces + generated enums. The spec's **response**
-bodies are example-only (`{"type":"object","example":{…}}`, no `properties`), so a
-generator would emit `unknown` for every response. Therefore **response models are
-hand-derived** from the example JSON (re-verified against the live docs) as Zod
-schemas. `z.looseObject` keeps unknown fields so additions don't break
-deserialization between SDK releases.
+Historically the spec's **request** bodies were richly typed (nested objects, enums)
+while its **response** bodies were example-only (`{"type":"object","example":{…}}`,
+no `properties`), so a generator would have emitted `unknown` for every response.
+That is why response models are **hand-derived** Zod schemas.
+
+**Changed 2026-09-15:** the runtime spec now publishes real `properties` for every
+`200` response. That does *not* flip the decision — the models stay hand-written
+(the docs mirror is still example-only, the schemas encode SDK-specific choices like
+`blitzList`'s `null`→`[]` coercion and the superset-model strategy, and generated
+output would churn on every upstream tweak). It does make verification far cheaper:
+a sync can now diff the hand-written shape against real schema field lists instead
+of eyeballing examples. `z.looseObject` remains the safety net so additions don't
+break deserialization between SDK releases.
 
 ---
 
@@ -110,8 +132,8 @@ deserialization between SDK releases.
   response includes top-level `company_linkedin_url`, `max_results`, and
   `results_length` (its old spec example was `null`, so the Python model omits
   them). The TS `WaterfallIcpResponse` includes them.
-- **Pagination**: `search.people`/`companies`, `jobs.search`/`company`, and
-  `company.tam_by_jobs` (cursor) and
+- **Pagination**: `search.people`/`companies`, `jobs.search`/`company`,
+  `company.tam_by_jobs`/`tam_by_people` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` (`src/pagination.ts`),
   Stainless/OpenAI-style but
   snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates the same
@@ -129,9 +151,9 @@ deserialization between SDK releases.
   given) so a stuck stream aborts instead of looping forever; offset stops at
   `page >= total_pages`. `waterfall_icp` is not paginated. The cursor/offset wiring
   lives in two factories (`make_cursor_page_promise`/`make_offset_page_promise`) so
-  all four cursor methods share one path and the guard lives in one place.
+  all five cursor methods share one path and the guard lives in one place.
   - **`max_results` is page size, not a total** (the API bills 1 record per result
-    returned), so `for await` streams every match up to the server limit. The six
+    returned), so `for await` streams every match up to the server limit. The seven
     paginated methods therefore accept a client-side **`max_items`** total cap that
     bounds `for await`/`collect()` and stops fetching once reached. `max_items` is
     destructured off in the resource method and **never sent on the wire** (it's not
@@ -157,12 +179,13 @@ src/
                   STATUS_ERRORS maps code->class.
   client.ts       BlitzAPI: the fetch retry loop, options ctor, lazy memoized resource getters.
   pagination.ts   Page/CursorPage/OffsetPage/PagePromise: auto-pagination for the
-                  search.* and jobs.* lists.
+                  search.*, jobs.* and company.tam_by_* lists.
   resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog).
   types/
     models.ts     blitzObject = (shape) => z.looseObject(shape);
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
-    shared.ts     Location, Experience, Education, Certification, Person, HQ, Company.
+    shared.ts     Location, Experience, Education, Certification, Person, HQ,
+                  EmployeeGrowth, Company, MeteredValue, FairUsage.
     enums.ts      GENERATED. Industry(534) + CompanyType/EmployeeRange/Continent/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement. Never hand-edit (see §7).
@@ -220,15 +243,34 @@ false and break the very callers the alias exists for.
   byte-for-byte. The generator emits each value via `JSON.stringify` so escaping
   round-trips exactly.
 - **`Company.linkedin_id` is a number**; `Person`/`Experience` linkedin ids are strings.
+- **`Company.employee_growth`** is a list of `{ percentage, timespan }` (`EmployeeGrowth`),
+  where `timespan` is a free-form label (`"1 year"`), not an enum. It uses `blitzList` (not
+  `.nullish()` like `specialties`) because the API's examples always return an array.
 - **`Location`** is reused for `Person.location`, `Experience.job_location`, and
-  `Job.location`. The jobs payload populates only `city`/`country_code`; because every
-  field is `.nullish()` on a `blitzObject`, the superset parses it unchanged rather than
-  needing a narrower per-endpoint duplicate.
+  `Job.location`. Only `Person.location` carries `postal_code`/`street_address`; the jobs
+  payload populates only `city`/`country_code`. Because every field is `.nullish()` on a
+  `blitzObject`, the superset parses all three unchanged rather than needing narrower
+  per-endpoint duplicates.
+- **`Education` has no `field_of_study`.** The API removed it on 2026-09-15 and folded the
+  field of study into `degree` (`"Bachelor of Science, Industrial Engineering"`). Guarded by
+  a schema-shape assertion in `models.test.ts` — `blitzObject` would otherwise happily
+  preserve a stray raw key and let the removal go unnoticed.
+- **`Person.profile_picture_url` is always `null`** since 2026-09-15. The API still returns
+  the key, so the field stays on the model (marked `@deprecated`) rather than being dropped.
+- **`Person.headline` is derived**, not the free-text LinkedIn headline: it is built from the
+  first position as `<job title> | @<employer>`.
+- **`Experience.job_contract_type`/`job_work_arrangement` stay loose strings**, not the
+  request-side `EmploymentType`/`WorkArrangement` enums — those enums exist only on the
+  request side of the *jobs* endpoints, and the person payload's values are free-form.
 - **`Job.date_posted` stays a string.** The API emits a non-ISO-8601 timestamp
   (`"2026-07-08 23:00:07+02"` — space separator, offset, no `T`), so it is never
   coerced to a `Date`.
-- **`HQ.postcode`/`street`** are only returned by company enrichment; **`Experience.company_name`**
-  only by people search. All optional on one superset model.
+- **`HQ.postcode`/`street` are no longer in the spec** — as of the 2026-09-15 sync they
+  appear on no endpoint and in no example (upstream never announced this). Kept as optional
+  fields anyway: they cost nothing when absent, and removing them would break callers over an
+  unannounced change. Expect `undefined`. **`Experience.company_name`** is now populated on
+  every person-returning endpoint (it used to be people-search-only) and prefers the name on
+  the linked LinkedIn company page.
 - **List fields use `blitzList(item)`** (`src/types/models.ts`), which coerces a
   missing **or `null`** value to `[]`. Plain `z.array(x).default([])` only fills the
   default for `undefined`, so an explicit `null` would throw a `ZodError` and break
@@ -266,18 +308,67 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 - Rate limiting is **per endpoint**: the client holds one token bucket per endpoint path
   (lazy `Map` in `client.ts`), each sized at `rate_limit_rps` (5 by default), so a burst on
   one endpoint (e.g. `enrichment.email`) never throttles another (e.g. `enrichment.phone`).
-  This mirrors the API, whose server-side limit is itself **per endpoint** (5 rps on each
+  This mirrors the API, whose server-side limit is itself **per endpoint** (10 rps on each
   endpoint independently, per the docs), so a single client instance stays under the limit on
   every endpoint. The 429 retry path remains the backstop for bursts across processes (each
   process has its own buckets). `blitz-api-py` is also per endpoint (sliding window there vs.
   token bucket here), so the "mirror 1:1" parity holds.
-- Rate limiter does not auto-detect your per-endpoint limit from `key_info` (uses 5 rps).
-- Response models are validated against the spec's *examples*, not a formal response
-  schema (the API doesn't publish one); `z.looseObject` is the safety net.
+- Rate limiter does not auto-detect your per-endpoint limit from `key_info` (uses 5 rps,
+  half the API's 10 — so the default leaves throughput on the table by design).
+- Request-side **list caps are not enforced client-side**: the API rejects any filter list
+  over 50 entries (and a `cascade` over 10 steps) with a `422`. The SDK documents the caps
+  on the filter interfaces but does not validate, so an over-long list surfaces as a server
+  error rather than a type error.
+- `z.looseObject` remains the safety net for response drift, now backed by real response
+  `properties` in the runtime spec (see §3) rather than examples alone.
 
 ---
 
 ## 10. Decision log
+
+- **2026-09-15** — Synced against the live spec + docs after the batch of upstream changes
+  published on `GET /changelog/` that day. **(1) Two new endpoints.**
+  `enrichment.person()` (`POST /v2/enrichment/person`, 1 record on success, free on a miss)
+  returns `PersonEnrichmentResponse` = `{found, person, fair_usage}` — the same envelope as
+  the reverse lookups, reusing the shared `Person`; named for the spec path, matching the
+  `CompanyEnrichmentResponse`/`/v2/enrichment/company` precedent.
+  `company.tam_by_people()` (`POST /v2/company/tam-by-people`, cursor-paginated, 1 record
+  per result) returns `{company, matched_people}` matches — the people-side twin of
+  `tam_by_jobs` (that one sizes accounts on who they're *hiring*, this one on who already
+  works there) — and rides the existing `make_cursor_page_promise`, so it inherits the
+  null-cursor stop and non-advancing-cursor guard for free.
+  **(2) Breaking (response):** `Education.field_of_study` is **removed** — the API folded
+  the field of study into `degree` (`"Bachelor of Science, Industrial Engineering"`).
+  Guarded by the existing `Education` schema-shape assertion, which is exactly why that
+  assertion exists: `blitzObject` would otherwise preserve a stray key and hide the change.
+  **(3) Breaking (request):** `PeopleFilter.linkedin_url` **removed**. `/v2/search/people`
+  stopped honouring it on 2026-09-11 — a request that still sends it *succeeds* but silently
+  returns results for the other criteria, the worst possible failure mode — so the SDK turns
+  it into a compile error. The filter survives on `company.tam_by_people`, so it moved to a
+  new `TamPeopleFilter extends PeopleFilter` (which also carries `min_per_company`),
+  mirroring the `TamJobFilter extends JobFilter` split rather than widening the shared
+  filter. `CompanyFilter.linkedin_url` is untouched (still honoured on `search.people` and
+  now `tam_by_people`; still ignored by `search.companies`).
+  **(4) New response fields**, all additive on the superset models: `Location.postal_code` /
+  `street_address` (person locations only), `Experience.job_contract_type` /
+  `job_work_arrangement` (loose strings — free-form upstream, deliberately *not* pinned to
+  the request-side `EmploymentType`/`WorkArrangement` enums), and `Company.slogan` /
+  `revenue` / `employee_growth` (a new `EmployeeGrowth` = `{percentage, timespan}` list,
+  `blitzList` rather than `specialties`-style `.nullish()` because the examples always
+  return an array). **(5) Semantics-only, documented not enforced:** `headline` is now
+  derived as `<job title> | @<employer>`; `profile_picture_url` is always `null` (kept on
+  the model, marked `@deprecated`, since the API still returns the key);
+  `search.people`/`enrichment.person` return the *whole* career in `experiences[]`; every
+  filter list is capped at 50 entries and `cascade` at 10 steps (documented on the filter
+  interfaces, **not** validated client-side — see §9); `waterfall_icp`'s
+  `profile_min_connections` server default is `0`, not 200. **(6)** API rate limit is now
+  **10 req/s per endpoint** (50 on legacy plans); `DEFAULT_RATE_LIMIT_RPS` stays **5** —
+  the published docs describe the SDK default as deliberately half the cap — so only the
+  prose in `constants.ts`/README/§2/§9 changed. **(7)** `records_remaining: "unlimited"`
+  needed no code change: `MeteredValue` already modelled it. Enums regenerated from the
+  live spec: **zero drift**. Also rewrote §3 — the runtime spec now publishes real response
+  `properties`, so a sync can diff against schemas instead of examples; the models stay
+  hand-written (reasons in §3). Not yet mirrored in `blitz-api-py`.
 
 - **2026-09-02** — Purged "credits" from the SDK's vocabulary; the API no longer uses the
   word (the live spec has **zero** occurrences — endpoints document `Cost: 1 record per

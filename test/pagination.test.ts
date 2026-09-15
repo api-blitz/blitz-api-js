@@ -55,6 +55,38 @@ describe("cursor pagination (company.tam_by_jobs)", () => {
   });
 });
 
+describe("cursor pagination (company.tam_by_people)", () => {
+  it("streams every match across pages and stops on cursor: null", async () => {
+    const bodies: Array<{ cursor?: string | null }> = [];
+    server.use(
+      http.post(`${BASE}/v2/company/tam-by-people`, async ({ request }) => {
+        const body = (await request.json()) as { cursor?: string | null };
+        bodies.push(body);
+        if (!body.cursor) {
+          return HttpResponse.json({
+            results: [{ company: { name: "P1" }, matched_people: 4 }],
+            cursor: "tamp2",
+          });
+        }
+        return HttpResponse.json({
+          results: [{ company: { name: "P2" }, matched_people: 9 }],
+          cursor: null,
+        });
+      }),
+    );
+
+    const names: Array<string | null | undefined> = [];
+    for await (const match of client().company.tam_by_people({ max_results: 1 })) {
+      names.push(match.company?.name);
+    }
+
+    expect(names).toEqual(["P1", "P2"]);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).not.toHaveProperty("cursor");
+    expect(bodies[1]?.cursor).toBe("tamp2");
+  });
+});
+
 describe("cursor pagination (search.people)", () => {
   // Page 1 -> cursor "c2"; page 2 -> cursor null (terminate).
   function install(bodies: Array<{ cursor?: string | null }>): void {

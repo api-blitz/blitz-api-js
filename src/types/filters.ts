@@ -34,7 +34,13 @@ export type SeniorityValue = Seniority | (string & {});
 export type EmploymentTypeValue = EmploymentType | (string & {});
 export type WorkArrangementValue = WorkArrangement | (string & {});
 
-/** Free-text include/exclude keyword filter. */
+/**
+ * Free-text include/exclude keyword filter.
+ *
+ * Every filter list on the search endpoints is capped at **50 entries** server
+ * side; a longer list is rejected with a `422`. Split a longer list across
+ * several requests.
+ */
 export interface KeywordFilter {
   include?: string[];
   exclude?: string[];
@@ -75,8 +81,8 @@ export interface CompanyHQFilter {
 
 /** Company search criteria, shared by `search.companies` and `search.people`. */
 export interface CompanyFilter {
-  /** Match specific companies by LinkedIn URL. Applied on `search.people` only;
-   * `search.companies` ignores it. */
+  /** Match specific companies by LinkedIn URL. Applied on `search.people` and
+   * `company.tam_by_people` only; `search.companies` ignores it. */
   linkedin_url?: string[];
   name?: KeywordFilter;
   industry?: IndustryFilter;
@@ -115,10 +121,16 @@ export interface PeopleLocationFilter {
   sales_region?: SalesRegionValue[];
 }
 
-/** People search criteria for `search.people`. */
+/**
+ * People search criteria, shared by `search.people` and
+ * `company.tam_by_people`.
+ *
+ * `linkedin_url` is **not** here: `/v2/search/people` stopped accepting it on
+ * 2026-09-11 (a request that still sends it succeeds but silently ignores the
+ * filter), and it survives only on `company.tam_by_people` — see
+ * {@link TamPeopleFilter}.
+ */
 export interface PeopleFilter {
-  /** Match specific people by their LinkedIn profile URL (server caps at 50). */
-  linkedin_url?: string[];
   job_title?: PeopleJobTitleFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
@@ -199,6 +211,24 @@ export interface TamJobFilter extends JobFilter {
    * Only include companies with at least this many matching job postings
    * (integer, 0–25; `0` = unset). Raises the bar for what counts as a hit when
    * building a Total Addressable Market.
+   */
+  min_per_company?: number;
+}
+
+/**
+ * People criteria for `company.tam_by_people` — the same shape as
+ * {@link PeopleFilter} plus a per-company floor and the `linkedin_url` filter
+ * that `search.people` no longer honours. Extending (rather than widening
+ * `PeopleFilter`) keeps the shared filter, which has neither field, clean —
+ * the same split as {@link TamJobFilter} over {@link JobFilter}.
+ */
+export interface TamPeopleFilter extends PeopleFilter {
+  /** Match specific people by their LinkedIn profile URL (server caps at 50). */
+  linkedin_url?: string[];
+  /**
+   * Only include companies with at least this many matching employees
+   * (integer, 0–25; `0` = unset). When it filters heavily a page may come back
+   * partial — keep paging until `cursor` is `null`.
    */
   min_per_company?: number;
 }
@@ -313,6 +343,30 @@ export interface TamByJobsParams {
   max_items?: number;
 }
 
+/**
+ * Params for `company.tam_by_people` — build a Total Addressable Market of
+ * companies from the people who already work there (each result is a company
+ * plus how many of its current employees matched). Takes the same filters as
+ * `search.people`. Cursor-paginated. The API bills **1 record per result
+ * returned** (up to `max_results`). Can raise `AuthenticationError` (401),
+ * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ */
+export interface TamByPeopleParams {
+  /** Company firmographics — the same block as `search.people` ({@link CompanyFilter}). */
+  company?: CompanyFilter;
+  /** People filters plus `linkedin_url`/`min_per_company` (see {@link TamPeopleFilter}). */
+  people?: TamPeopleFilter;
+  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
+  max_results?: number;
+  cursor?: string;
+  /**
+   * Client-side cap on the **total** items streamed via `for await` / `collect()`
+   * across all pages; stops fetching once reached. Not sent on the wire — set
+   * `max_results` to bound the per-page (and therefore per-page billing) size.
+   */
+  max_items?: number;
+}
+
 export interface EmployeeFinderParams {
   company_linkedin_url: string;
   country_code?: string[];
@@ -334,13 +388,14 @@ export interface EmployeeFinderParams {
 
 export interface WaterfallIcpParams {
   company_linkedin_url: string;
+  /** Tiers tried in priority order. Capped at **10** steps server side. */
   cascade: CascadeTier[];
-  /** Minimum LinkedIn connections for a match. Server defaults to 200. */
+  /** Minimum LinkedIn connections for a match. Server defaults to `0`. */
   profile_min_connections?: number;
   max_results?: number;
 }
 
-/** Params for `enrichment.email` and `enrichment.phone`. */
+/** Params for `enrichment.person`, `enrichment.email`, and `enrichment.phone`. */
 export interface PersonLinkedinUrlParams {
   person_linkedin_url: string;
 }
