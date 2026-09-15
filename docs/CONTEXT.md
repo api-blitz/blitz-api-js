@@ -44,7 +44,14 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   describe the same endpoints — see §3 for which to use for what. All endpoints are
   `/v2/...` (plus the public `/changelog/`).
 - **Status conventions**: 401 invalid/missing key · 402 Fair Use limit reached ·
-  404 not found · 429 rate limited (wait 60s then retry) · 5xx server error.
+  404 not found · 422 invalid input (body `{success, error:{code, message}}`; documented
+  on `domain-to-linkedin`, but any endpoint can reject a malformed body — e.g. a filter
+  list over 50 entries) · 429 rate limited (wait 60s then retry) · **503 partial search
+  failure**, explicitly retriable, on `search.people`/`companies` and
+  `jobs.search`/`company` (since 2026-08-05 they return it instead of a truncated page) ·
+  5xx server error. The SDK already handles both correctly with no special-casing: 503
+  falls under `>= 500` so it retries as a `ServerError`, and 422 is a non-retried
+  `APIStatusError`.
 - **`fair_usage`**: every `/v2` response (and the `402` body) carries a per-request
   usage block — `records_used`, `records_remaining` (`number | "unlimited"`),
   `next_reset_at`, `rate_limit.{requests_per_second,remaining_this_second}`, and

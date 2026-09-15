@@ -67,9 +67,10 @@ pnpm lint && pnpm typecheck && pnpm gen:enums:check && pnpm test && pnpm build
 
 ## Retry / errors / rate limit (mirror, do not drift)
 
-- Retry `429`, `>= 500`, and **pre-response** network errors; **timeouts are terminal**
-  (never retried — a timed-out, per-result-billed POST may already have run);
-  `401/402/404` throw immediately.
+- Retry `429`, `>= 500` (incl. the `503` the search/jobs endpoints return on a partial
+  failure — explicitly retriable), and **pre-response** network errors; **timeouts are
+  terminal** (never retried — a timed-out, per-result-billed POST may already have run);
+  `401/402/404/422` throw immediately.
 - 429 waits `Retry-After` or 60s; else exponential backoff `min(8, 0.5*2^(n-1)) + jitter`.
 - Error hierarchy in `src/errors.ts`; status map `{401,402,404,429}` else
   `ServerError` (5xx) / `APIStatusError`. A 2xx body that isn't JSON or fails Zod
