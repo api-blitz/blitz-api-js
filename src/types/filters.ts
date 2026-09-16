@@ -282,59 +282,49 @@ export interface JobCompanyFilter {
 // Method parameter shapes (the request body for each endpoint, snake_case).
 // ---------------------------------------------------------------------------
 
-export interface PeopleSearchParams {
+/**
+ * The paging controls every cursor-paginated method accepts.
+ *
+ * `max_results` is the **page size**, not a total: the API bills 1 record per
+ * result returned, so a bare `for await` streams every match up to the server
+ * limit. Bound the total with `max_items`.
+ */
+export interface CursorPaginatedParams {
+  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
+  max_results?: number;
+  /** Pass back the `cursor` from the previous page; `null` there means the walk is done. */
+  cursor?: string;
+  /**
+   * Client-side cap on the **total** items streamed via `for await` / `collect()`
+   * across all pages; stops fetching once reached. Not sent on the wire — set
+   * `max_results` to bound the per-page (and therefore per-page billing) size.
+   */
+  max_items?: number;
+}
+
+/** The paging controls the one offset-paginated method (`search.employee_finder`) accepts. */
+export interface OffsetPaginatedParams extends Omit<CursorPaginatedParams, "cursor"> {
+  /** 1-based page number. Defaults to 1. */
+  page?: number;
+}
+
+export interface PeopleSearchParams extends CursorPaginatedParams {
   company?: CompanyFilter;
   people?: PeopleFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface CompanySearchParams {
+export interface CompanySearchParams extends CursorPaginatedParams {
   company?: CompanyFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface JobSearchParams {
+export interface JobSearchParams extends CursorPaginatedParams {
   job?: JobFilter;
   company?: JobCompanyFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface CompanyJobsParams {
+export interface CompanyJobsParams extends CursorPaginatedParams {
   company_linkedin_url: string;
   job?: JobFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
 /**
@@ -344,20 +334,11 @@ export interface CompanyJobsParams {
  * result returned** (up to `max_results`). Can raise `AuthenticationError` (401),
  * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
-export interface TamByJobsParams {
+export interface TamByJobsParams extends CursorPaginatedParams {
   /** Job-level filters plus `min_per_company` (see {@link TamJobFilter}). */
   job?: TamJobFilter;
   /** Company firmographics — the same block as `jobs.search` ({@link JobCompanyFilter}). */
   company?: JobCompanyFilter;
-  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
 /**
@@ -368,23 +349,14 @@ export interface TamByJobsParams {
  * returned** (up to `max_results`). Can raise `AuthenticationError` (401),
  * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
-export interface TamByPeopleParams {
+export interface TamByPeopleParams extends CursorPaginatedParams {
   /** Company firmographics — the same block as `search.people` ({@link CompanyFilter}). */
   company?: CompanyFilter;
   /** People filters plus `linkedin_url`/`min_per_company` (see {@link TamPeopleFilter}). */
   people?: TamPeopleFilter;
-  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface EmployeeFinderParams {
+export interface EmployeeFinderParams extends OffsetPaginatedParams {
   company_linkedin_url: string;
   country_code?: string[];
   continent?: ContinentValue[];
@@ -392,15 +364,6 @@ export interface EmployeeFinderParams {
   job_level?: JobLevelValue[];
   job_function?: JobFunctionValue[];
   min_connections_count?: number;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  page?: number;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
 export interface WaterfallIcpParams {

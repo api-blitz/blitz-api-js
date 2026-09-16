@@ -219,20 +219,26 @@ export class PagePromise<TItem, TResponse>
   }
 }
 
+/** The envelope every cursor-paginated endpoint returns (see `types/envelopes.ts`). */
+export interface CursorEnvelope<TItem> {
+  results: TItem[];
+  cursor?: string | null;
+}
+
 /**
  * Build a {@link PagePromise} for a cursor-paginated endpoint.
  *
- * The resource method supplies `fetch_page` (which sends the request for a given
- * cursor) plus the accessors that pull the items and the next cursor out of a
- * response; `search.people`, `search.companies`, `jobs.search` and `jobs.company`
- * all share this one path.
+ * The resource method supplies only `fetch_page` (which sends the request for a
+ * given cursor). Because every cursor response is built by `cursor_envelope`,
+ * `results` and `cursor` are guaranteed by the {@link CursorEnvelope} constraint
+ * rather than passed in as accessors at each call site — the six cursor methods
+ * (`search.people`/`companies`, `jobs.search`/`company`,
+ * `company.tam_by_jobs`/`tam_by_people`) all share this one path.
  */
-export function make_cursor_page_promise<TItem, TResponse>(
+export function make_cursor_page_promise<TItem, TResponse extends CursorEnvelope<TItem>>(
   initial_cursor: string | undefined,
   max_items: number | undefined,
   fetch_page: (cursor?: string) => Promise<TResponse>,
-  get_items: (response: TResponse) => TItem[],
-  get_cursor: (response: TResponse) => string | null | undefined,
 ): PagePromise<TItem, TResponse> {
   return new PagePromise<TItem, TResponse>(
     fetch_page(initial_cursor).then(
@@ -241,12 +247,18 @@ export function make_cursor_page_promise<TItem, TResponse>(
           response,
           initial_cursor,
           fetch_page,
-          get_items,
-          get_cursor,
+          (r) => r.results,
+          (r) => r.cursor,
         ),
     ),
     max_items,
   );
+}
+
+/** The envelope the one offset-paginated endpoint returns. */
+export interface OffsetEnvelope<TItem> {
+  results: TItem[];
+  total_pages?: number | null;
 }
 
 /**
@@ -255,12 +267,10 @@ export function make_cursor_page_promise<TItem, TResponse>(
  * the two pagination styles have different shapes, so one generic paginator would
  * be more indirection than it's worth.
  */
-export function make_offset_page_promise<TItem, TResponse>(
+export function make_offset_page_promise<TItem, TResponse extends OffsetEnvelope<TItem>>(
   start_page: number,
   max_items: number | undefined,
   fetch_page: (page: number) => Promise<TResponse>,
-  get_items: (response: TResponse) => TItem[],
-  get_total_pages: (response: TResponse) => number | null | undefined,
 ): PagePromise<TItem, TResponse> {
   return new PagePromise<TItem, TResponse>(
     fetch_page(start_page).then(
@@ -269,8 +279,8 @@ export function make_offset_page_promise<TItem, TResponse>(
           response,
           start_page,
           fetch_page,
-          get_items,
-          get_total_pages,
+          (r) => r.results,
+          (r) => r.total_pages,
         ),
     ),
     max_items,

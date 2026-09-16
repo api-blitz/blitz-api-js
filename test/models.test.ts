@@ -1,6 +1,8 @@
 /** The hand-written Zod schemas must match the API's example shapes. */
 
 import { describe, expect, it } from "vitest";
+import * as z from "zod";
+import * as api from "../src/index.js";
 import {
   ChangelogResponse,
   CompanyDistributionByCountryResponse,
@@ -238,33 +240,21 @@ describe("response models", () => {
 
   it("declares fair_usage on every /v2 response model", () => {
     // The API attaches the block to every `/v2` endpoint; only the public
-    // `/changelog/` (a top-level array) is exempt.
-    const V2_RESPONSES = {
-      KeyInfo,
-      CurrentDateResponse,
-      PeopleSearchResponse,
-      CompanySearchResponse,
-      EmployeeFinderResponse,
-      WaterfallIcpResponse,
-      JobSearchResponse,
-      CompanyJobsResponse,
-      TamByJobsResponse,
-      TamByPeopleResponse,
-      PersonEnrichmentResponse,
-      EmailEnrichmentResponse,
-      PhoneEnrichmentResponse,
-      EmailToPersonResponse,
-      PhoneToPersonResponse,
-      CompanyEnrichmentResponse,
-      DomainToLinkedinResponse,
-      LinkedinToDomainResponse,
-      CompanyDistributionByCountryResponse,
-      CompanyDistributionByDepartmentResponse,
-    };
-    expect(Object.keys(V2_RESPONSES)).toHaveLength(20);
-    for (const [name, schema] of Object.entries(V2_RESPONSES)) {
-      expect(`${name}: ${Object.keys(schema.shape).includes("fair_usage")}`).toBe(`${name}: true`);
+    // `/changelog/` (a top-level array) is exempt. Every envelope is built by
+    // `v2_response`, so this holds by construction. Sweeping the whole export
+    // surface rather than a hand-maintained list means a new endpoint added
+    // without the factory fails here without anyone remembering to update a count.
+    const missing: string[] = [];
+    let checked = 0;
+    for (const [name, value] of Object.entries(api)) {
+      const is_v2_model = name === "KeyInfo" || name.endsWith("Response");
+      if (!is_v2_model || !(value instanceof z.ZodObject)) continue;
+      checked += 1;
+      if (!Object.keys(value.shape).includes("fair_usage")) missing.push(name);
     }
+    expect(missing).toEqual([]);
+    // ChangelogResponse is a top-level array, not a ZodObject, so it is skipped.
+    expect(checked).toBe(20);
   });
 
   it("parses a response that omits fair_usage (older deployment)", () => {

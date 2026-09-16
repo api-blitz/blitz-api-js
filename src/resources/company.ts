@@ -32,13 +32,8 @@ export class CompanyResource {
     { max_items, ...params }: TamByJobsParams = {},
     options?: RequestOptions,
   ): PagePromise<TamByJobsMatch, TamByJobsResponse> {
-    return make_cursor_page_promise<TamByJobsMatch, TamByJobsResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request("POST", TAM_BY_JOBS, { ...params, cursor }, TamByJobsResponse, options),
-      (r) => r.results,
-      (r) => r.cursor,
+    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
+      this.client.request("POST", TAM_BY_JOBS, { ...params, cursor }, TamByJobsResponse, options),
     );
   }
 
@@ -63,19 +58,14 @@ export class CompanyResource {
     { max_items, ...params }: TamByPeopleParams = {},
     options?: RequestOptions,
   ): PagePromise<TamByPeopleMatch, TamByPeopleResponse> {
-    return make_cursor_page_promise<TamByPeopleMatch, TamByPeopleResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request(
-          "POST",
-          TAM_BY_PEOPLE,
-          { ...params, cursor },
-          TamByPeopleResponse,
-          options,
-        ),
-      (r) => r.results,
-      (r) => r.cursor,
+    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
+      this.client.request(
+        "POST",
+        TAM_BY_PEOPLE,
+        { ...params, cursor },
+        TamByPeopleResponse,
+        options,
+      ),
     );
   }
 }

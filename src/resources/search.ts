@@ -38,13 +38,8 @@ export class SearchResource {
     { max_items, ...params }: PeopleSearchParams = {},
     options?: RequestOptions,
   ): PagePromise<Person, PeopleSearchResponse> {
-    return make_cursor_page_promise<Person, PeopleSearchResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request("POST", PEOPLE, { ...params, cursor }, PeopleSearchResponse, options),
-      (r) => r.results,
-      (r) => r.cursor,
+    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
+      this.client.request("POST", PEOPLE, { ...params, cursor }, PeopleSearchResponse, options),
     );
   }
 
@@ -56,19 +51,8 @@ export class SearchResource {
     { max_items, ...params }: CompanySearchParams = {},
     options?: RequestOptions,
   ): PagePromise<Company, CompanySearchResponse> {
-    return make_cursor_page_promise<Company, CompanySearchResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request(
-          "POST",
-          COMPANIES,
-          { ...params, cursor },
-          CompanySearchResponse,
-          options,
-        ),
-      (r) => r.results,
-      (r) => r.cursor,
+    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
+      this.client.request("POST", COMPANIES, { ...params, cursor }, CompanySearchResponse, options),
     );
   }
 
@@ -80,19 +64,14 @@ export class SearchResource {
     { max_items, ...params }: EmployeeFinderParams,
     options?: RequestOptions,
   ): PagePromise<Person, EmployeeFinderResponse> {
-    return make_offset_page_promise<Person, EmployeeFinderResponse>(
-      params.page ?? 1,
-      max_items,
-      (page) =>
-        this.client.request(
-          "POST",
-          EMPLOYEE_FINDER,
-          { ...params, page },
-          EmployeeFinderResponse,
-          options,
-        ),
-      (r) => r.results,
-      (r) => r.total_pages,
+    return make_offset_page_promise(params.page ?? 1, max_items, (page) =>
+      this.client.request(
+        "POST",
+        EMPLOYEE_FINDER,
+        { ...params, page },
+        EmployeeFinderResponse,
+        options,
+      ),
     );
   }
 

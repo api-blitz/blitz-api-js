@@ -1,8 +1,9 @@
 /** Response models for the Account resource. */
 
 import * as z from "zod";
+import { v2_response } from "./envelopes.js";
 import { blitzList, blitzObject } from "./models.js";
-import { FairUsage, MeteredValue } from "./shared.js";
+import { MeteredValue } from "./shared.js";
 
 /** A subscription plan attached to the API key. */
 export const ActivePlan = blitzObject({
@@ -13,7 +14,7 @@ export const ActivePlan = blitzObject({
 export type ActivePlan = z.infer<typeof ActivePlan>;
 
 /** The result of `client.account.key_info()` — key health and limits. */
-export const KeyInfo = blitzObject({
+export const KeyInfo = v2_response({
   valid: z.boolean().nullish(),
   id: z.string().nullish(),
   /**
@@ -26,7 +27,7 @@ export const KeyInfo = blitzObject({
   max_requests_per_seconds: MeteredValue,
   allowed_apis: blitzList(z.string()),
   active_plans: blitzList(ActivePlan),
-  /** Carries no `rate_limit` block here — key-info is the one endpoint that is not rate limited. */
-  fair_usage: FairUsage.nullish(),
+  // NB: the inherited `fair_usage` carries no `rate_limit` block on this endpoint —
+  // key-info is the one endpoint that is not rate limited.
 });
 export type KeyInfo = z.infer<typeof KeyInfo>;

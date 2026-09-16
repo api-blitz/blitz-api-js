@@ -189,8 +189,12 @@ src/
                   search.*, jobs.* and company.tam_by_* lists.
   resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog).
   types/
-    models.ts     blitzObject = (shape) => z.looseObject(shape);
+    models.ts     INTERNAL (not re-exported). blitzObject = (shape) => z.looseObject(shape);
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
+    envelopes.ts  INTERNAL (not re-exported). v2_response(shape) appends the shared
+                  fair_usage block; cursor_envelope(item) / search_envelope(item) build
+                  the paginated envelopes. Every /v2 model is constructed through these,
+                  so fair_usage is structural rather than a remembered convention.
     shared.ts     Location, Experience, Education, Certification, Person, HQ,
                   EmployeeGrowth, Company, MeteredValue, FairUsage.
     enums.ts      GENERATED. Industry(535) + CompanyType/EmployeeRange/Continent/
@@ -335,6 +339,39 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-09-16** — Deduplicated the response/pagination layer after a code-quality audit
+  found the "add an endpoint" checklist had become duplicated state that grew with every
+  release (the `(r) => r.results` closure went 3 → 5 → 6 → 7 across feature commits, and
+  the 9-line `max_results`/`cursor`/`max_items` params tail was byte-identical 7 times).
+  Four layers, all behaviour-preserving: **(1)** new internal `types/envelopes.ts` with
+  `v2_response(shape)`, which appends the shared `fair_usage` block — 19 copies of the
+  same doc comment and 20 hand-written field declarations gone, and the block is now
+  impossible to omit. **(2)** `cursor_envelope(item)` / `search_envelope(item)` build the
+  six paginated envelopes (the latter adds `total_results`; the `tam_by_*` pair omits it,
+  as the API does). Spread rather than `.extend()`ed so each envelope keeps the API's own
+  field order — verified the parsed key order still matches the wire exactly. **(3)**
+  `make_cursor_page_promise`/`make_offset_page_promise` now constrain `TResponse` to a
+  `CursorEnvelope`/`OffsetEnvelope`, which the factories guarantee by construction, so all
+  seven call sites drop both accessor closures and their (always inferable) explicit
+  generic arguments — a paginated resource method fell from 8 body lines to 3, leaving
+  only the per-endpoint path and schema. **(4)** `CursorPaginatedParams` /
+  `OffsetPaginatedParams` base interfaces replace the seven repeated tails. Net **−132
+  lines**. The `fair_usage` test stopped being a hand-maintained list of 20 names (which
+  only checked models someone remembered to add) and became a sweep of the export surface;
+  confirmed it bites by temporarily regressing one model off the factory. **Surface
+  impact:** the emitted `.d.ts` is unchanged apart from doc comments, a cosmetic
+  type-level reordering of `total_results`, the `extends` clauses themselves, and **two
+  new exports** — `CursorPaginatedParams`/`OffsetPaginatedParams`, additive and now part
+  of the public request vocabulary. `envelopes.ts` is internal, like `models.ts`.
+  **Deliberately not done** (considered and rejected): merging `Location`/`HQ` (different
+  wire keys); unifying `country_code`'s `string[]` vs `KeywordFilter` split (the API
+  genuinely differs per endpoint — faithful mirroring); a `found_envelope(key, model)`
+  factory (the payload key varies, so it would be magic hiding a simple shape); merging
+  `CursorPage`/`OffsetPage` (genuinely different `has_next_page` logic, 687 lines of tests
+  riding on them); collapsing the seven `{include, exclude}` filter interfaces (they are
+  the public surface, and `Enum | (string & {})` already makes them mutually assignable —
+  the safety is autocomplete-only by design).
 
 - **2026-09-16** — Follow-up spec re-pull, one day after the 2026-09-15 sync. Upstream
   published two changelog entries; the spec delta is tiny and entirely additive.

@@ -21,13 +21,8 @@ export class JobsResource {
     { max_items, ...params }: JobSearchParams = {},
     options?: RequestOptions,
   ): PagePromise<Job, JobSearchResponse> {
-    return make_cursor_page_promise<Job, JobSearchResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request("POST", SEARCH, { ...params, cursor }, JobSearchResponse, options),
-      (r) => r.results,
-      (r) => r.cursor,
+    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
+      this.client.request("POST", SEARCH, { ...params, cursor }, JobSearchResponse, options),
     );
   }
 
@@ -39,13 +34,8 @@ export class JobsResource {
     { max_items, ...params }: CompanyJobsParams,
     options?: RequestOptions,
   ): PagePromise<Job, CompanyJobsResponse> {
-    return make_cursor_page_promise<Job, CompanyJobsResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request("POST", COMPANY, { ...params, cursor }, CompanyJobsResponse, options),
-      (r) => r.results,
-      (r) => r.cursor,
+    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
+      this.client.request("POST", COMPANY, { ...params, cursor }, CompanyJobsResponse, options),
     );
   }
 }

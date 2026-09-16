@@ -31,10 +31,14 @@ changes — it records the design decisions so you don't re-derive them.
   both files; commit both. CI drift guard `pnpm gen:enums:check` stays **offline**
   (renders from the committed cache — never fetches), so it never breaks on a
   network blip or an upstream change.
-- **`fair_usage`** — every `/v2` response carries the shared `FairUsage` block
-  (`shared.ts`), attached as `fair_usage: FairUsage.nullish()` on every envelope. A
-  new endpoint must declare it; `test/models.test.ts` asserts every `/v2` model does.
-  `MeteredValue` (`number | "unlimited"`) is the shared union for record/rate values.
+- **Build response envelopes with the factories in `src/types/envelopes.ts`**, never by
+  hand: `v2_response(shape)` for any `/v2` response (it appends the shared `fair_usage`
+  block, so it can't be forgotten), `cursor_envelope(item)` for a cursor-paginated one,
+  `search_envelope(item)` when it also reports `total_results`. `envelopes.ts` is
+  internal — like `models.ts` it is deliberately not re-exported from `types/index.ts`.
+  `test/models.test.ts` sweeps the export surface and fails if any `/v2` model lacks
+  `fair_usage`. `MeteredValue` (`number | "unlimited"`) is the shared union for
+  record/rate values.
 - Superset models with optional fields (`.nullish()` scalars, `blitzList(...)` for
   lists — coerces a missing **or `null`** value to `[]`), not per-endpoint duplicates.
   Numeric fields use `z.number().nullish()`. Use plain `.nullish()` only for a list the
@@ -55,12 +59,18 @@ pnpm lint && pnpm typecheck && pnpm gen:enums:check && pnpm test && pnpm build
    (`https://api.blitz-api.ai/openapi`) and an example payload from the docs mirror
    (`https://docs.blitz-api.ai/api-reference/v2.openapi.json`).
 2. Request types → add/extend an interface in `src/types/filters.ts` (snake_case).
-3. Response model → add a `blitzObject` schema in the right `src/types/<group>.ts`,
-   reusing `shared.ts` models; export it from `src/types/index.ts`.
+3. Response model → build it with a factory from `src/types/envelopes.ts` in the right
+   `src/types/<group>.ts`, reusing `shared.ts` models; export it from
+   `src/types/index.ts`. A paginated endpoint is usually one line:
+   `export const XResponse = cursor_envelope(XMatch);`.
 4. Resource method → add it to the class in `src/resources/<group>.ts`, calling
    `this.client.request("POST", path, params, ResponseSchema, options)` with a path
    constant; accept an optional `options?: RequestOptions` (per-call `timeout`) last
    arg and pass it through (paginated methods capture it in the page-fetch closure).
+   A paginated method passes only `(cursor, max_items, fetch_page)` — `results`/`cursor`
+   are guaranteed by the envelope constraint, so no accessor callbacks. Params
+   interfaces `extend CursorPaginatedParams` / `OffsetPaginatedParams` rather than
+   re-declaring `max_results`/`cursor`/`max_items`.
 5. Tests → a parse test in `test/models.test.ts` (+ payload in `test/data.ts`) and a
    request/response test in `test/resources.test.ts`.
 6. Run all checks. Use a `feat:` commit.
