@@ -193,7 +193,7 @@ src/
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
     shared.ts     Location, Experience, Education, Certification, Person, HQ,
                   EmployeeGrowth, Company, MeteredValue, FairUsage.
-    enums.ts      GENERATED. Industry(534) + CompanyType/EmployeeRange/Continent/
+    enums.ts      GENERATED. Industry(535) + CompanyType/EmployeeRange/Continent/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement. Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
@@ -244,11 +244,14 @@ false and break the very callers the alias exists for.
 
 ## 7. Data-model specifics & quirks
 
-- **`Industry` has 534 values** including upstream oddities: near-duplicates
+- **`Industry` has 535 values** including upstream oddities: near-duplicates
   (`"Airlines and Aviation"` vs `"Airlines/Aviation"`) and one double-escaped value,
   `"Women\\'s Handbag Manufacturing"` (two literal backslashes + apostrophe). Kept
   byte-for-byte. The generator emits each value via `JSON.stringify` so escaping
-  round-trips exactly.
+  round-trips exactly. The 535th, **`"Unknown"`** (added 2026-09-16), is a *sentinel*
+  rather than an industry — it matches companies with no industry value, and upstream
+  appends it after the alphabetical run, which the generator preserves (it mirrors spec
+  order, it does not sort).
 - **`Company.linkedin_id` is a number**; `Person`/`Experience` linkedin ids are strings.
 - **`Company.employee_growth`** is a list of `{ percentage, timespan }` (`EmployeeGrowth`),
   where `timespan` is a free-form label (`"1 year"`), not an enum. It uses `blitzList` (not
@@ -332,6 +335,26 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-09-16** — Follow-up spec re-pull, one day after the 2026-09-15 sync. Upstream
+  published two changelog entries; the spec delta is tiny and entirely additive.
+  **(1)** `Industry` gained a 535th value, **`"Unknown"`** — a sentinel matching companies
+  with *no* industry, usable in `include` (adds them to your list) or `exclude` (drops
+  them). Before it, reaching those companies meant enumerating every other industry in
+  `exclude`, which the 50-entry cap made impossible. Picked up by `pnpm gen:enums:fetch`
+  with zero hand-editing; the generator's divergence check passed, confirming upstream
+  added it consistently to all inlined copies. Note it lands **after** the alphabetical
+  run (upstream appends), which the generator preserves — it mirrors spec order and does
+  not sort. **(2)** Range filters now reject `min > max` with a `422` naming the field.
+  Previously accepted and silently wrong: `company.revenue` 500'd, every other range
+  returned no results. Pure server-side validation, no schema change — documented on
+  `RangeFilter` (along with `max: 0` meaning *no upper bound*) because the failure mode
+  moved from "empty page" to "thrown `APIStatusError`", which callers may need to handle.
+  **(3)** The only other spec diff is `company.industry.include`/`exclude` losing their
+  `default: []` — inert here, since the SDK never encodes request defaults (`to_jsonable`
+  just drops `undefined`). No endpoints, fields, or constraints changed otherwise;
+  verified by a field-and-constraint diff across both spec pulls. Stale `534` counts
+  corrected in README/§5/§7.
 
 - **2026-09-15** — Synced against the live spec + docs after the batch of upstream changes
   published on `GET /changelog/` that day. **(1) Two new endpoints.**

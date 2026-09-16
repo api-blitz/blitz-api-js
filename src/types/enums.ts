@@ -540,6 +540,7 @@ export const INDUSTRY = [
   "Wood Product Manufacturing",
   "Writing and Editing",
   "Zoos and Botanical Gardens",
+  "Unknown",
 ] as const;
 export type Industry = (typeof INDUSTRY)[number];
 export const IndustrySchema = z.enum(INDUSTRY);

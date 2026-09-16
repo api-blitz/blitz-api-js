@@ -46,7 +46,16 @@ export interface KeywordFilter {
   exclude?: string[];
 }
 
-/** Include/exclude filter over the fixed industry taxonomy. */
+/**
+ * Include/exclude filter over the fixed industry taxonomy.
+ *
+ * `"Unknown"` is a sentinel, not a real industry: it matches companies that have
+ * **no** industry value at all. In `include` it is added to the industries you
+ * list (`["Banking", "Unknown"]` returns banks plus every company with no
+ * industry); in `exclude` it drops them. Added 2026-09-16 — before it, reaching
+ * those companies meant listing every other industry in `exclude`, which the
+ * 50-entry cap made impossible.
+ */
 export interface IndustryFilter {
   include?: IndustryValue[];
   exclude?: IndustryValue[];
@@ -64,7 +73,15 @@ export interface LastFundingTypeFilter {
   exclude?: LastFundingTypeValue[];
 }
 
-/** Numeric range filter. `0` means unset for most fields. */
+/**
+ * Numeric range filter. `0` means unset for most fields, and a `max` of `0`
+ * specifically means **no upper bound**.
+ *
+ * Since 2026-09-16 a range whose `min` is above its `max` is rejected with a
+ * `422` naming the field. Previously it was accepted and silently misbehaved —
+ * `company.revenue` failed with a `500`, every other range returned no results —
+ * so this surfaces as a thrown `APIStatusError` rather than an empty page.
+ */
 export interface RangeFilter {
   min?: number;
   max?: number;

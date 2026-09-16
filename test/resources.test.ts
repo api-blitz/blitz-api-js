@@ -10,6 +10,7 @@ import {
   CompanyEnrichmentResponse,
   CurrentDateResponse,
   EmailEnrichmentResponse,
+  INDUSTRY,
   PersonEnrichmentResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
@@ -135,6 +136,29 @@ describe("resources", () => {
         lead_investors: { include: ["Sequoia Capital"] },
         hq: { state: { include: ["California"] } },
       },
+      max_results: 1,
+    });
+  });
+
+  it('sends the "Unknown" industry sentinel, which is a real INDUSTRY member', async () => {
+    // "Unknown" (added 2026-09-16) matches companies with no industry value. It must be
+    // in the generated enum so it autocompletes as an IndustryValue rather than only
+    // working as a raw string — a regeneration that dropped it would fail here.
+    expect(INDUSTRY).toContain("Unknown");
+
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/search/companies`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.COMPANY_SEARCH);
+      }),
+    );
+    await client().search.companies({
+      company: { industry: { include: ["Banking", "Unknown"] } },
+      max_results: 1,
+    });
+    expect(body).toEqual({
+      company: { industry: { include: ["Banking", "Unknown"] } },
       max_results: 1,
     });
   });
