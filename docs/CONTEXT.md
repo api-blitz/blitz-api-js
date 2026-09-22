@@ -365,7 +365,11 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   than kept: unlike `HQ.postcode`/`street` — which the spec *used* to document, so dropping
   them would break callers over an unannounced change — these were never documented, so
   nothing can be relying on them. `blitzObject` still preserves them as unknown keys if the
-  API turns out to send them. **(2) `experiences[]` on `search.people` is back to the
+  API turns out to send them. Note this is **not** a breaking change against the released
+  `2.0.0`: all three fields (and `EmployeeGrowth`) were added and removed inside this same
+  unreleased branch, so no published version ever carried them — they need no
+  `BREAKING CHANGE:` footer, and listing them as one would tell users to fix code that
+  never compiled against a real release. **(2) `experiences[]` on `search.people` is back to the
   matched position only** (upstream 2026-09-21), reversing part of the 2026-09-15 change;
   `enrichment.person` still returns the whole career, which is now the reason to reach for
   it. No schema change — the field is the same `blitzList(Experience)` either way — but the
@@ -390,7 +394,18 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   the classes lets them read `response.results`/`.cursor`/`.total_pages` directly, so all
   six fields and six params are gone (`pagination.ts` 288 → 266). The duplicated
   "is the cursor usable" predicate in `has_next_page`/`get_next_page` collapsed into one
-  `#next_cursor()`. **(2)** New internal `resources/paginate.ts` with
+  `#next_cursor()`. **This is a public-surface break, and the only one in the audit that
+  reaches a released API:** `CursorPage`/`OffsetPage` are re-exported from `index.ts`, so
+  their constructors go 5 args → 3 and `TResponse` gains a
+  `CursorEnvelope`/`OffsetEnvelope` constraint — anyone who constructed a page by hand, or
+  named the type over a `TResponse` without `results`, has to change. Counted as acceptable
+  rather than papered over with a compatible overload: the discarded 5-arg form also
+  required a `fetch_page` closure that only `make_*_page_promise` can build, so the
+  constructor is reachable but not usefully callable from outside, and an overload would
+  resurrect the exact accessor layer this entry deletes. It ships in a release that is
+  already breaking, with a `BREAKING CHANGE:` footer rather than a silent signature change.
+  (Raised in review on PR #23; recorded here rather than reverted.) **(2)** New internal
+  `resources/paginate.ts` with
   `cursor_page()`/`offset_page()`. The seven paginated methods each re-implemented the same
   three obligations — strip `max_items`, rewrite the paging key, thread `options` into
   *every* page fetch — which is the same remembered-convention problem `v2_response` solved
