@@ -138,14 +138,12 @@ later are preserved, typed as `unknown`):
 }
 ```
 
-How many positions land in `experiences[]` on a **search** result is currently
-ambiguous — upstream contradicts itself. The changelog entry of 2026-09-21 says
-`search.people` returns only the position that matched your query; the API reference for
-the same endpoint says the opposite ("the person's full position history [...] not just
-the position that matched your filters"), and its response examples show two positions
-per person. Don't depend on either reading from a search result. If you need the whole
+`experiences[]` on a **search** result carries the position that matched your query —
+in practice a single entry — not the person's career. (The API reference page still
+describes the old full-history behaviour; it is out of date, per the 2026-09-21 changelog
+entry.) Write your code for one position and don't index past it. If you need the whole
 career in profile order, `client.enrichment.person({ person_linkedin_url })` returns the
-same `person` shape unambiguously (1 record on success, free on a miss):
+same `person` shape with every position held (1 record on success, free on a miss):
 
 ```ts
 const { found, person } = await client.enrichment.person({

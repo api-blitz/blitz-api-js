@@ -356,33 +356,39 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
-- **2026-09-22** — **`experiences[]` on `search.people` is contested upstream; the SDK now
-  says so instead of picking a side** (#27, mirroring `blitz-api-py`). The earlier pass
-  today read the 2026-09-21 changelog entry as settled and wrote "carries only the position
-  that matched your query" into the README as fact. Re-checking all three sources shows
-  that is one side of a live contradiction:
+- **2026-09-22** — **`experiences[]` on `search.people` carries the matched position
+  only — treat it as a single entry.** Resolved by the API owner after #27 challenged it;
+  recorded here because the published sources still disagree and will mislead the next
+  reader who checks them.
+
+  What the three sources say, as of today:
   - `GET /changelog/`, 2026-09-21: "`experiences[]` on `/v2/search/people` now carries the
-    single position that matched your search."
+    single position that matched your search." **Correct.**
   - `docs.blitz-api.ai/api-reference/people-search/find-people`: "Every result carries the
     person's full position history in `experiences[]`, in profile order, **not just the
-    position that matched your filters**" — still live, and it negates the changelog's exact
-    phrasing rather than merely lagging it.
+    position that matched your filters**." **Stale** — it describes pre-2026-09-21
+    behaviour and explicitly negates the changelog's phrasing, so it reads as a live
+    contradiction rather than a lag. Its two-positions-per-person response examples are
+    stale for the same reason, and are *not* independent corroboration of its prose.
   - The runtime spec carries no `description` on the field, so it breaks no tie.
 
-  The tiebreaker we do have points *away* from the changelog: two of the three response
-  examples on that same docs page carry **two** positions per person, at two different
-  companies (a current Google role alongside a past Stripe internship; a current Google
-  directorship alongside a past Meta role). A single matched position cannot be two entries
-  at two employers, so the page's examples corroborate its prose. Being the later statement
-  does not beat being explicitly denied by the reference *and* by its payloads.
+  #27 read the docs page as authoritative on the grounds that being the later statement
+  does not beat being explicitly denied by the reference — reasonable from the published
+  record alone, and the example payloads made it look stronger still. It was wrong anyway:
+  the reference and its examples are both stale. **Lesson for the next sync: when the
+  changelog and the reference page conflict, neither the docs prose nor its examples settle
+  it — ask the API owner.** A docs example is evidence that a field *exists* (per the rule
+  in §7); it is not evidence of cardinality, because examples are not regenerated on a
+  behaviour change.
 
-  So the README, the `Person.experiences` doc comment and the decision log all state the
-  conflict and tell callers not to depend on either reading, keeping the `enrichment.person`
-  routing — which is the actionable part and correct under both. Docs-only; the field is
-  `blitzList(Experience)` under either reading, so nothing in the schema moves. **The real
-  fix is upstream:** once the API owner resolves the changelog/docs contradiction, both SDKs
-  can state it plainly and drop the hedge. Cheap to carry until then, and far cheaper than
-  sending readers to a billed `enrichment.person` call they may not need.
+  The API owner's phrasing is "only the matched experience in most cases", so the SDK says
+  the matched position and tells callers to write for one entry, rather than promising
+  exactly one. `enrichment.person` stays the documented route to a whole career and is the
+  actionable part either way. Docs-only — the field is `blitzList(Experience)` under any
+  reading, so nothing in the schema moves. **Still outstanding upstream:** the reference
+  page and its examples need correcting, and `blitz-api-py` carries the same hedge this
+  entry just removed (its issue #30 / PR #24), so the two SDKs are divergent again until it
+  is updated.
 
 - **2026-09-22** — Cleared the three cross-SDK divergences `blitz-api-py` raised against
   PR #23 (issues #24, #25, #26), all folded into the same breaking release rather than
@@ -434,14 +440,11 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   `2.0.0`: all three fields (and `EmployeeGrowth`) were added and removed inside this same
   unreleased branch, so no published version ever carried them — they need no
   `BREAKING CHANGE:` footer, and listing them as one would tell users to fix code that
-  never compiled against a real release. **(2) `experiences[]` on `search.people` is documented as
-  *contested*, not narrowed** (see the 2026-09-22 entry on #27 above for the evidence).
-  The first pass read the 2026-09-21 changelog entry as settled and wrote the narrowing
-  into the README as fact; the API reference for the same endpoint explicitly denies that
-  exact phrasing and its examples show two positions per person, so the docs are not
-  merely lagging. No schema change either way — the field is the same
-  `blitzList(Experience)` — and `enrichment.person` is the unambiguous route to a whole
-  career, which is the actionable part and is correct under both readings.
+  never compiled against a real release. **(2) `experiences[]` on `search.people` is back to the
+  matched position only** (upstream 2026-09-21), reversing part of the 2026-09-15 change;
+  `enrichment.person` still returns the whole career, which is now the reason to reach for
+  it. No schema change — the field is the same `blitzList(Experience)` either way. See the
+  2026-09-22 entry on #27 above for why this survived a challenge.
   **(3) `Unknown` widened** (upstream 2026-09-17): on the people- and job-side endpoints
   `company.industry.include` now also matches records with **no company attached**, not just
   companies with no industry value; `exclude` drops both. `search.companies` keeps the
@@ -583,7 +586,7 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   derived as `<job title> | @<employer>`; `profile_picture_url` is always `null` (kept on
   the model, marked `@deprecated`, since the API still returns the key);
   `search.people`/`enrichment.person` return the *whole* career in `experiences[]`
-  (*contested for `search.people` since 2026-09-21 — see the entries above*); every
+  (*narrowed to the matched position for `search.people` on 2026-09-21 — see above*); every
   filter list is capped at 50 entries and `cascade` at 10 steps (documented on the filter
   interfaces, **not** validated client-side — see §9); `waterfall_icp`'s
   `profile_min_connections` server default is `0`, not 200. **(6)** API rate limit is now

@@ -99,13 +99,12 @@ export const Person = blitzObject({
    */
   profile_picture_url: z.string().nullish(),
   /**
-   * How much of the career is returned depends on the endpoint, and for
-   * `search.people` upstream currently contradicts itself: the 2026-09-21 changelog
-   * entry says only the position that matched the query, while the API reference for
-   * the endpoint says the full position history "not just the position that matched
-   * your filters" — and its examples show two positions per person. Treat the count
-   * from a search result as unspecified. `enrichment.person` and the reverse lookups
-   * unambiguously send every position held, in profile order.
+   * How much of the career is returned depends on the endpoint. `search.people`
+   * sends the position that matched the query — in practice a single entry, so treat
+   * it as one and don't read it as a career (since 2026-09-21; the API reference page
+   * still describes the old full-history behaviour and is out of date).
+   * `enrichment.person` and the reverse lookups send every position held, in profile
+   * order.
    */
   experiences: blitzList(Experience),
   education: blitzList(Education),
