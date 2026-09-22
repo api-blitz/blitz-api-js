@@ -239,22 +239,53 @@ describe("response models", () => {
   });
 
   it("declares fair_usage on every /v2 response model", () => {
-    // The API attaches the block to every `/v2` endpoint; only the public
-    // `/changelog/` (a top-level array) is exempt. Every envelope is built by
-    // `v2_response`, so this holds by construction. Sweeping the whole export
-    // surface rather than a hand-maintained list means a new endpoint added
-    // without the factory fails here without anyone remembering to update a count.
+    // The API attaches the block to every `/v2` endpoint, and `v2_response` makes that
+    // structural. This sweep is the backstop for the one way it can still be missed:
+    // building a response with bare `blitzObject`.
+    //
+    // It is deliberately an *exemption* list, not an inclusion rule. Matching on
+    // `name.endsWith("Response")` would silently skip any endpoint model named
+    // otherwise — `KeyInfo` is already proof that they exist — so instead every
+    // exported object schema must be either a known nested sub-model or carry
+    // `fair_usage`. A new model of any name forces a choice here rather than
+    // slipping through unchecked.
+    const SUB_MODELS = new Set([
+      "ActivePlan",
+      "Certification",
+      "ChangelogEntry",
+      "ChangelogLink",
+      "Company",
+      "CountryDistributionItem",
+      "DepartmentDistributionItem",
+      "DomainToLinkedinMatch",
+      "Education",
+      "EmailMatch",
+      "EmployeeGrowth",
+      "Experience",
+      "FairUsage",
+      "FairUsageRateLimit",
+      "HQ",
+      "Job",
+      "Location",
+      "Person",
+      "TamByJobsMatch",
+      "TamByPeopleMatch",
+      "WaterfallIcpMatch",
+    ]);
+
     const missing: string[] = [];
-    let checked = 0;
+    const responses: string[] = [];
     for (const [name, value] of Object.entries(api)) {
-      const is_v2_model = name === "KeyInfo" || name.endsWith("Response");
-      if (!is_v2_model || !(value instanceof z.ZodObject)) continue;
-      checked += 1;
+      // ChangelogResponse is a top-level array, not a ZodObject, so it is skipped.
+      if (!(value instanceof z.ZodObject) || SUB_MODELS.has(name)) continue;
+      responses.push(name);
       if (!Object.keys(value.shape).includes("fair_usage")) missing.push(name);
     }
     expect(missing).toEqual([]);
-    // ChangelogResponse is a top-level array, not a ZodObject, so it is skipped.
-    expect(checked).toBe(20);
+    // Sanity-check the exemption list itself still describes real exports, so a
+    // renamed or deleted sub-model can't quietly widen it.
+    expect([...SUB_MODELS].filter((name) => !(name in api))).toEqual([]);
+    expect(responses.length).toBeGreaterThanOrEqual(20);
   });
 
   it("parses a response that omits fair_usage (older deployment)", () => {
@@ -288,12 +319,35 @@ describe("response models", () => {
     });
     expect(resp.results).toEqual([]);
 
+    // Every list the spec types `array | null` must coerce, not reject. The API really
+    // does send `null` for an empty list on sparse profiles, and the sibling Python SDK
+    // hit a genuine ValidationError here before it grew the same coercion.
     const person = EmailToPersonResponse.parse({
       found: false,
-      person: { full_name: "X", experiences: null, skills: null },
+      person: {
+        full_name: "X",
+        experiences: null,
+        skills: null,
+        education: null,
+        certifications: null,
+      },
     });
     expect(person.person?.experiences).toEqual([]);
     expect(person.person?.skills).toEqual([]);
+    expect(person.person?.education).toEqual([]);
+    expect(person.person?.certifications).toEqual([]);
+
+    // Same for the newest list field on the company side.
+    const company = CompanyEnrichmentResponse.parse({
+      found: true,
+      company: { name: "Y", employee_growth: null },
+    });
+    expect(company.company?.employee_growth).toEqual([]);
+    // `specialties`, which the API documents as genuinely nullable, must stay null.
+    expect(
+      CompanyEnrichmentResponse.parse({ found: true, company: { specialties: null } }).company
+        ?.specialties,
+    ).toBeNull();
 
     // An omitted list still defaults to [] (unchanged behavior).
     expect(KeyInfo.parse({ valid: true }).allowed_apis).toEqual([]);
