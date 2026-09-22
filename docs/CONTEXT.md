@@ -158,13 +158,13 @@ break deserialization between SDK releases.
   given) so a stuck stream aborts instead of looping forever; offset stops at
   `page >= total_pages`. `waterfall_icp` is not paginated. The cursor/offset wiring
   lives in two factories (`make_cursor_page_promise`/`make_offset_page_promise`) so
-  all five cursor methods share one path and the guard lives in one place.
+  all six cursor methods share one path and the guard lives in one place.
   - **`max_results` is page size, not a total** (the API bills 1 record per result
     returned), so `for await` streams every match up to the server limit. The seven
     paginated methods therefore accept a client-side **`max_items`** total cap that
     bounds `for await`/`collect()` and stops fetching once reached. `max_items` is
-    destructured off in the resource method and **never sent on the wire** (it's not
-    an API field). It caps the `PagePromise` streaming entry point only — `await` +
+    destructured off in `cursor_page`/`offset_page` (not the resource method, which
+    passes `params` whole) and **never sent on the wire** (it's not an API field). It caps the `PagePromise` streaming entry point only — `await` +
     manual `get_next_page()` stay uncapped. `PagePromise.collect()` drains the
     (capped) stream into an array via a small `take(source, n)` generator.
 
@@ -186,17 +186,24 @@ src/
                   STATUS_ERRORS maps code->class.
   client.ts       BlitzAPI: the fetch retry loop, options ctor, lazy memoized resource getters.
   pagination.ts   Page/CursorPage/OffsetPage/PagePromise: auto-pagination for the
-                  search.*, jobs.* and company.tam_by_* lists.
+                  search.*, jobs.* and company.tam_by_* lists. CursorPage/OffsetPage
+                  read results/cursor/total_pages straight off the response, via the
+                  CursorEnvelope/OffsetEnvelope constraints — no accessor callbacks.
   resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog).
+    paginate.ts   INTERNAL. cursor_page()/offset_page(): the one place a paginated method
+                  builds its request — strips max_items, rewrites the paging key, threads
+                  options into every page fetch. The seven paginated methods are one line each.
   types/
     models.ts     INTERNAL (not re-exported). blitzObject = (shape) => z.looseObject(shape);
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
     envelopes.ts  INTERNAL (not re-exported). v2_response(shape) appends the shared
                   fair_usage block; cursor_envelope(item) / search_envelope(item) build
-                  the paginated envelopes. Every /v2 model is constructed through these,
-                  so fair_usage is structural rather than a remembered convention.
-    shared.ts     Location, Experience, Education, Certification, Person, HQ,
-                  EmployeeGrowth, Company, MeteredValue, FairUsage.
+                  the paginated envelopes; offset_fields(item) is the offset counterpart
+                  (spread, not wrapped — employee-finder prefixes its own field). Every
+                  /v2 model is constructed through these, so fair_usage is structural
+                  rather than a remembered convention.
+    shared.ts     Location, Experience, Education, Certification, Person, HQ, Company,
+                  MeteredValue, FairUsage.
     enums.ts      GENERATED. Industry(535) + CompanyType/EmployeeRange/Continent/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement. Never hand-edit (see §7).
@@ -257,9 +264,13 @@ false and break the very callers the alias exists for.
   appends it after the alphabetical run, which the generator preserves (it mirrors spec
   order, it does not sort).
 - **`Company.linkedin_id` is a number**; `Person`/`Experience` linkedin ids are strings.
-- **`Company.employee_growth`** is a list of `{ percentage, timespan }` (`EmployeeGrowth`),
-  where `timespan` is a free-form label (`"1 year"`), not an enum. It uses `blitzList` (not
-  `.nullish()` like `specialties`) because the API's examples always return an array.
+- **`Company` carries no `slogan`/`revenue`/`employee_growth`.** They were added in the
+  2026-09-15 sync and removed again on 2026-09-22: neither spec documents them on any
+  response (`revenue` exists only as a *request-side* range filter) and no changelog entry
+  announces them, so they would have read `undefined` forever. `blitzObject` preserves them
+  as unknown keys if the API ever does send them. Rule: a response field goes on a model
+  only if the runtime spec's response `properties` or a docs-mirror example shows it —
+  a hand-written test fixture is not evidence, it just confirms itself.
 - **`Location`** is reused for `Person.location`, `Experience.job_location`, and
   `Job.location`. Only `Person.location` carries `postal_code`/`street_address`; the jobs
   payload populates only `city`/`country_code`. Because every field is `.nullish()` on a
@@ -340,6 +351,70 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-09-22** — Changelog re-pull before merging the sync branch, per the "start any sync
+  at `GET /changelog/`" rule — which the 2026-09-15 pass had not re-run, so it missed two
+  upstream entries and shipped three fields that were never there.
+  **(1) Removed `Company.slogan`, `Company.revenue`, `Company.employee_growth` and the
+  `EmployeeGrowth` model.** A field-path diff of every response model against the runtime
+  spec found them to be the only SDK-side fields with no counterpart anywhere: the runtime
+  spec has no `slogan`/`employee_growth` at all and carries `revenue` only as a
+  *request-side* range filter (`company.revenue.min`/`max`), the docs mirror's company
+  examples omit all three, and no changelog entry announces them. Typed, they would read
+  `undefined` on every response while promising a value; the parse test could not catch it
+  because the fixture in `test/data.ts` supplied the values it then asserted. Removed rather
+  than kept: unlike `HQ.postcode`/`street` — which the spec *used* to document, so dropping
+  them would break callers over an unannounced change — these were never documented, so
+  nothing can be relying on them. `blitzObject` still preserves them as unknown keys if the
+  API turns out to send them. **(2) `experiences[]` on `search.people` is back to the
+  matched position only** (upstream 2026-09-21), reversing part of the 2026-09-15 change;
+  `enrichment.person` still returns the whole career, which is now the reason to reach for
+  it. No schema change — the field is the same `blitzList(Experience)` either way — but the
+  README said the opposite, which would have sent callers to the wrong endpoint.
+  **(3) `Unknown` widened** (upstream 2026-09-17): on the people- and job-side endpoints
+  `company.industry.include` now also matches records with **no company attached**, not just
+  companies with no industry value; `exclude` drops both. `search.companies` keeps the
+  narrower meaning. `IndustryFilter` is shared by all of them, so its doc comment now splits
+  the two readings instead of documenting only the `search.companies` one.
+  **Verified unchanged:** every other response model matches the runtime spec field-for-field
+  (the only remaining SDK-side extras are the deliberate `Location`/`HQ` superset fields), the
+  request filters match the spec's request `properties` exactly, and the `cascade: 10` /
+  50-entry caps, `profile_min_connections: 0` default, `422` body shape and search-side `503`
+  are all still as documented.
+
+- **2026-09-22** — Second code-quality audit, finishing what the 2026-09-16 pass started.
+  All behaviour-preserving; no wire change. **(1)** The accessor layer the previous entry
+  claimed to delete was only *half* deleted: the six call sites stopped passing
+  `get_items`/`get_cursor`/`get_total_pages`, but `CursorPage`/`OffsetPage` still carried
+  them as private fields and constructor params, now fed by two hardcoded lambda triples
+  inside the factories. Pushing the `CursorEnvelope`/`OffsetEnvelope` constraint down onto
+  the classes lets them read `response.results`/`.cursor`/`.total_pages` directly, so all
+  six fields and six params are gone (`pagination.ts` 288 → 266). The duplicated
+  "is the cursor usable" predicate in `has_next_page`/`get_next_page` collapsed into one
+  `#next_cursor()`. **(2)** New internal `resources/paginate.ts` with
+  `cursor_page()`/`offset_page()`. The seven paginated methods each re-implemented the same
+  three obligations — strip `max_items`, rewrite the paging key, thread `options` into
+  *every* page fetch — which is the same remembered-convention problem `v2_response` solved
+  for `fair_usage`; each method body is now one line. **(3)** `offset_fields(item)` in
+  `envelopes.ts`, the counterpart to `cursor_fields`, spread into `EmployeeFinderResponse`
+  (verified parsed key order still matches the wire exactly). Not wrapped in an envelope
+  factory: the sole offset endpoint prefixes `company_linkedin_url`, and the offset wire
+  order genuinely differs from the cursor one (`results` last, `max_results` before
+  `results_length`) — one parameterised shape would be magic hiding that.
+  **(4) Breaking (request):** `CompanyFilter.linkedin_url` moved to a new
+  `PeopleCompanyFilter extends CompanyFilter`, used by `PeopleSearchParams` and
+  `TamByPeopleParams`. `search.companies` accepts-then-silently-ignores the field — the
+  identical failure mode that got `PeopleFilter.linkedin_url` removed one week earlier, so
+  it gets the identical treatment rather than staying a documented superset field. Sending
+  it to `search.companies` is now a compile error; the two people-side endpoints are
+  unaffected. **(5)** The `fair_usage` sweep in `test/models.test.ts` was matching on
+  `name.endsWith("Response")`, which silently skipped any endpoint model named otherwise —
+  `KeyInfo` is proof those exist. Confirmed the hole by exporting a `/v2` model with no
+  `fair_usage` named `BalanceSnapshot`: all 139 tests passed. Inverted to an explicit
+  `SUB_MODELS` exemption list (every exported `ZodObject` must be a known nested model or
+  carry `fair_usage`), which fails on that probe, and dropped the hand-maintained count of
+  20 that the sweep was supposed to have replaced. A second assertion keeps the exemption
+  list itself honest by checking each name still resolves to a real export.
+
 - **2026-09-16** — Deduplicated the response/pagination layer after a code-quality audit
   found the "add an endpoint" checklist had become duplicated state that grew with every
   release (the `(r) => r.results` closure went 3 → 5 → 6 → 7 across feature commits, and
@@ -419,13 +494,13 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   **(4) New response fields**, all additive on the superset models: `Location.postal_code` /
   `street_address` (person locations only), `Experience.job_contract_type` /
   `job_work_arrangement` (loose strings — free-form upstream, deliberately *not* pinned to
-  the request-side `EmploymentType`/`WorkArrangement` enums), and `Company.slogan` /
-  `revenue` / `employee_growth` (a new `EmployeeGrowth` = `{percentage, timespan}` list,
-  `blitzList` rather than `specialties`-style `.nullish()` because the examples always
-  return an array). **(5) Semantics-only, documented not enforced:** `headline` is now
+  the request-side `EmploymentType`/`WorkArrangement` enums). *(This entry also added
+  `Company.slogan`/`revenue`/`employee_growth`; reverted 2026-09-22 — see the entry above,
+  they are in neither spec.)* **(5) Semantics-only, documented not enforced:** `headline` is now
   derived as `<job title> | @<employer>`; `profile_picture_url` is always `null` (kept on
   the model, marked `@deprecated`, since the API still returns the key);
-  `search.people`/`enrichment.person` return the *whole* career in `experiences[]`; every
+  `search.people`/`enrichment.person` return the *whole* career in `experiences[]`
+  (*`search.people` reverted upstream on 2026-09-21 — see the entry above*); every
   filter list is capped at 50 entries and `cascade` at 10 steps (documented on the filter
   interfaces, **not** validated client-side — see §9); `waterfall_icp`'s
   `profile_min_connections` server default is `0`, not 200. **(6)** API rate limit is now

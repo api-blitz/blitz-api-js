@@ -14,7 +14,10 @@ changes — it records the design decisions so you don't re-derive them.
   (= `z.looseObject`) so unknown fields are preserved (forward-compat). Verify shapes
   against the runtime spec `https://api.blitz-api.ai/openapi` (typed responses) and
   the docs mirror `https://docs.blitz-api.ai/api-reference/v2.openapi.json` (example
-  payloads). Start any sync at `GET https://api.blitz-api.ai/changelog/`.
+  payloads). Start any sync at `GET https://api.blitz-api.ai/changelog/` — and re-read it
+  right before merging, since upstream keeps moving while a sync branch is open. A response
+  field earns a place on a model only if the runtime spec's response `properties` or a
+  docs-mirror example shows it; a fixture you wrote yourself is not evidence.
 - **Async-only.** One `BlitzAPI` class; methods return a `Promise` (or a `PagePromise`
   for the paginated lists). Uses the global `fetch` (overridable via the `fetch` option).
 - **Pagination** (`src/pagination.ts`): `search.people`/`companies`,
@@ -23,7 +26,12 @@ changes — it records the design decisions so you don't re-derive them.
   (`.data` items, `.response` raw 1:1 body, `has_next_page()`/`get_next_page()`/`iter_pages()`),
   or `for await` to stream all items. Cursor stops on `cursor === null` (and throws on a
   non-advancing cursor to avoid an infinite loop); offset at `page >= total_pages`.
-  Cursor/offset wiring is shared via `make_cursor_page_promise`/`make_offset_page_promise`.
+  Cursor/offset wiring is shared via `cursor_page`/`offset_page` in
+  `src/resources/paginate.ts` (they strip `max_items`, rewrite the paging key, and thread
+  `options` into every page fetch) over
+  `make_cursor_page_promise`/`make_offset_page_promise`. `CursorPage`/`OffsetPage` read
+  `results`/`cursor`/`total_pages` off the response through the
+  `CursorEnvelope`/`OffsetEnvelope` constraints — never pass accessor callbacks.
   `waterfall_icp` is not paginated. Keep helper names snake_case.
 - **`enums.ts` and `openapi/enum-source.json` are both generated** — never
   hand-edit. Run `pnpm gen:enums:fetch` to pull the live spec
@@ -34,11 +42,19 @@ changes — it records the design decisions so you don't re-derive them.
 - **Build response envelopes with the factories in `src/types/envelopes.ts`**, never by
   hand: `v2_response(shape)` for any `/v2` response (it appends the shared `fair_usage`
   block, so it can't be forgotten), `cursor_envelope(item)` for a cursor-paginated one,
-  `search_envelope(item)` when it also reports `total_results`. `envelopes.ts` is
+  `search_envelope(item)` when it also reports `total_results`, `offset_fields(item)`
+  spread into the one offset-paginated response. `envelopes.ts` is
   internal — like `models.ts` it is deliberately not re-exported from `types/index.ts`.
-  `test/models.test.ts` sweeps the export surface and fails if any `/v2` model lacks
-  `fair_usage`. `MeteredValue` (`number | "unlimited"`) is the shared union for
+  `test/models.test.ts` sweeps every exported object schema and fails unless each is
+  either listed in its `SUB_MODELS` exemption set or declares `fair_usage` — so a new
+  response model of *any* name gets checked. Add genuinely nested models to that set;
+  never widen it to silence a real endpoint model. `MeteredValue` (`number | "unlimited"`) is the shared union for
   record/rate values.
+- **A request field the API accepts and then ignores does not belong on that endpoint's
+  params type.** Split it onto a narrower interface (`PeopleCompanyFilter extends
+  CompanyFilter`, `TamPeopleFilter extends PeopleFilter`, `TamJobFilter extends
+  JobFilter`) rather than widening the shared one — a silently-dropped filter is the worst
+  failure mode, so make it a compile error.
 - Superset models with optional fields (`.nullish()` scalars, `blitzList(...)` for
   lists — coerces a missing **or `null`** value to `[]`), not per-endpoint duplicates.
   Numeric fields use `z.number().nullish()`. Use plain `.nullish()` only for a list the
@@ -66,9 +82,10 @@ pnpm lint && pnpm typecheck && pnpm gen:enums:check && pnpm test && pnpm build
 4. Resource method → add it to the class in `src/resources/<group>.ts`, calling
    `this.client.request("POST", path, params, ResponseSchema, options)` with a path
    constant; accept an optional `options?: RequestOptions` (per-call `timeout`) last
-   arg and pass it through (paginated methods capture it in the page-fetch closure).
-   A paginated method passes only `(cursor, max_items, fetch_page)` — `results`/`cursor`
-   are guaranteed by the envelope constraint, so no accessor callbacks. Params
+   arg and pass it through. A **paginated** method is one line —
+   `return cursor_page(this.client, PATH, params, XResponse, options)` (or `offset_page`)
+   — and takes `params` whole, *not* destructured: stripping `max_items` and rewriting
+   the cursor/page key belong to the helper, not the call site. Params
    interfaces `extend CursorPaginatedParams` / `OffsetPaginatedParams` rather than
    re-declaring `max_results`/`cursor`/`max_items`.
 5. Tests → a parse test in `test/models.test.ts` (+ payload in `test/data.ts`) and a

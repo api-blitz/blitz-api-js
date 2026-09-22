@@ -79,9 +79,6 @@ const COMPANY = {
   },
   domain: "google.com",
   website: "https://www.google.com",
-  slogan: "Organize the world's information",
-  revenue: 350000000000,
-  employee_growth: [{ percentage: 12.5, timespan: "1 year" }],
 };
 
 /**

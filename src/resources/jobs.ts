@@ -1,9 +1,10 @@
 /** The Jobs resource: `client.jobs`. */
 
 import type { BlitzAPI } from "../client.js";
-import { make_cursor_page_promise, type PagePromise } from "../pagination.js";
+import type { PagePromise } from "../pagination.js";
 import type { CompanyJobsParams, JobSearchParams, RequestOptions } from "../types/filters.js";
 import { CompanyJobsResponse, type Job, JobSearchResponse } from "../types/jobs.js";
+import { cursor_page } from "./paginate.js";
 
 const SEARCH = "/v2/jobs/search";
 const COMPANY = "/v2/jobs/company";
@@ -18,12 +19,10 @@ export class JobsResource {
    * `.has_next_page()`).
    */
   search(
-    { max_items, ...params }: JobSearchParams = {},
+    params: JobSearchParams = {},
     options?: RequestOptions,
   ): PagePromise<Job, JobSearchResponse> {
-    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
-      this.client.request("POST", SEARCH, { ...params, cursor }, JobSearchResponse, options),
-    );
+    return cursor_page(this.client, SEARCH, params, JobSearchResponse, options);
   }
 
   /**
@@ -31,11 +30,9 @@ export class JobsResource {
    * Cursor-paginated (see {@link JobsResource.search}).
    */
   company(
-    { max_items, ...params }: CompanyJobsParams,
+    params: CompanyJobsParams,
     options?: RequestOptions,
   ): PagePromise<Job, CompanyJobsResponse> {
-    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
-      this.client.request("POST", COMPANY, { ...params, cursor }, CompanyJobsResponse, options),
-    );
+    return cursor_page(this.client, COMPANY, params, CompanyJobsResponse, options);
   }
 }

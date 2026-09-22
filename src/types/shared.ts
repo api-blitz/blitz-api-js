@@ -98,6 +98,12 @@ export const Person = blitzObject({
    * clients that read it don't break, but it never carries a URL.
    */
   profile_picture_url: z.string().nullish(),
+  /**
+   * How much of the career is returned depends on the endpoint: `search.people`
+   * sends only the position that matched the query (since 2026-09-21), while
+   * `enrichment.person` and the reverse lookups send every position held, in
+   * profile order.
+   */
   experiences: blitzList(Experience),
   education: blitzList(Education),
   skills: blitzList(z.string()),
@@ -126,16 +132,6 @@ export const HQ = blitzObject({
 });
 export type HQ = z.infer<typeof HQ>;
 
-/**
- * Headcount change over a named period, e.g. `{ percentage: 12.5, timespan: "1 year" }`.
- * `timespan` is a free-form label, not a fixed enum.
- */
-export const EmployeeGrowth = blitzObject({
-  percentage: z.number().nullish(),
-  timespan: z.string().nullish(),
-});
-export type EmployeeGrowth = z.infer<typeof EmployeeGrowth>;
-
 /** A company profile returned by company search and company enrichment. */
 export const Company = blitzObject({
   linkedin_url: z.string().nullish(),
@@ -152,12 +148,6 @@ export const Company = blitzObject({
   hq: HQ.nullish(),
   domain: z.string().nullish(),
   website: z.string().nullish(),
-  /** The company's tagline, as written on its LinkedIn page. */
-  slogan: z.string().nullish(),
-  /** Estimated annual revenue, in USD. */
-  revenue: z.number().nullish(),
-  /** Headcount growth over one or more periods. */
-  employee_growth: blitzList(EmployeeGrowth),
 });
 export type Company = z.infer<typeof Company>;
 

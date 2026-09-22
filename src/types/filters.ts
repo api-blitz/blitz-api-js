@@ -49,12 +49,17 @@ export interface KeywordFilter {
 /**
  * Include/exclude filter over the fixed industry taxonomy.
  *
- * `"Unknown"` is a sentinel, not a real industry: it matches companies that have
- * **no** industry value at all. In `include` it is added to the industries you
- * list (`["Banking", "Unknown"]` returns banks plus every company with no
- * industry); in `exclude` it drops them. Added 2026-09-16 — before it, reaching
- * those companies meant listing every other industry in `exclude`, which the
- * 50-entry cap made impossible.
+ * `"Unknown"` is a sentinel, not a real industry. In `include` it is added to the
+ * industries you list (`["Banking", "Unknown"]` returns banks plus the sentinel's
+ * matches); in `exclude` it drops them. Added 2026-09-16 — before it, reaching those
+ * records meant listing every other industry in `exclude`, which the 50-entry cap made
+ * impossible.
+ *
+ * What it matches depends on the endpoint. On `search.companies` it is a company with
+ * **no industry value**. On the people- and job-side endpoints (`search.people`,
+ * `company.tam_by_people`, `jobs.*`, `company.tam_by_jobs`), where this filter sits
+ * under `company.industry`, it matches those **and** — since 2026-09-17 — records with
+ * **no company attached at all**; `exclude` drops both groups.
  */
 export interface IndustryFilter {
   include?: IndustryValue[];
@@ -96,11 +101,14 @@ export interface CompanyHQFilter {
   sales_region?: SalesRegionValue[];
 }
 
-/** Company search criteria, shared by `search.companies` and `search.people`. */
+/**
+ * Company search criteria, shared by `search.companies`, `search.people` and
+ * `company.tam_by_people`.
+ *
+ * `linkedin_url` is **not** here: only the people-side endpoints honour it, and
+ * `search.companies` accepts-then-ignores it — see {@link PeopleCompanyFilter}.
+ */
 export interface CompanyFilter {
-  /** Match specific companies by LinkedIn URL. Applied on `search.people` and
-   * `company.tam_by_people` only; `search.companies` ignores it. */
-  linkedin_url?: string[];
   name?: KeywordFilter;
   industry?: IndustryFilter;
   type?: CompanyTypeFilter;
@@ -120,6 +128,22 @@ export interface CompanyFilter {
   keywords?: KeywordFilter;
   founded_year?: RangeFilter;
   hq?: CompanyHQFilter;
+}
+
+/**
+ * Company criteria for the people-side searches — the same shape as
+ * {@link CompanyFilter} plus the `linkedin_url` filter that only `search.people`
+ * and `company.tam_by_people` honour.
+ *
+ * Extending (rather than leaving the field on the shared filter) keeps it off
+ * `search.companies`, which accepts it and then silently returns results for the
+ * other criteria — the same accepted-but-ignored failure mode that got
+ * `linkedin_url` removed from {@link PeopleFilter}, and the same split as
+ * {@link TamPeopleFilter} over {@link PeopleFilter}.
+ */
+export interface PeopleCompanyFilter extends CompanyFilter {
+  /** Match specific companies by LinkedIn URL (server caps the list at 50). */
+  linkedin_url?: string[];
 }
 
 /** Job-title filter. Wrap a value in `[brackets]` for an exact match. */
@@ -309,7 +333,7 @@ export interface OffsetPaginatedParams extends Omit<CursorPaginatedParams, "curs
 }
 
 export interface PeopleSearchParams extends CursorPaginatedParams {
-  company?: CompanyFilter;
+  company?: PeopleCompanyFilter;
   people?: PeopleFilter;
 }
 
@@ -350,8 +374,8 @@ export interface TamByJobsParams extends CursorPaginatedParams {
  * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
 export interface TamByPeopleParams extends CursorPaginatedParams {
-  /** Company firmographics — the same block as `search.people` ({@link CompanyFilter}). */
-  company?: CompanyFilter;
+  /** Company firmographics — the same block as `search.people` ({@link PeopleCompanyFilter}). */
+  company?: PeopleCompanyFilter;
   /** People filters plus `linkedin_url`/`min_per_company` (see {@link TamPeopleFilter}). */
   people?: TamPeopleFilter;
 }

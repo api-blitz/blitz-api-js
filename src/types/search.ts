@@ -1,7 +1,7 @@
 /** Response models for the Search resource. */
 
 import * as z from "zod";
-import { search_envelope, v2_response } from "./envelopes.js";
+import { offset_fields, search_envelope, v2_response } from "./envelopes.js";
 import { blitzList, blitzObject } from "./models.js";
 import { Company, Person } from "./shared.js";
 
@@ -20,11 +20,7 @@ export type CompanySearchResponse = z.infer<typeof CompanySearchResponse>;
  */
 export const EmployeeFinderResponse = v2_response({
   company_linkedin_url: z.string().nullish(),
-  max_results: z.number().nullish(),
-  results_length: z.number().nullish(),
-  page: z.number().nullish(),
-  total_pages: z.number().nullish(),
-  results: blitzList(Person),
+  ...offset_fields(Person),
 });
 export type EmployeeFinderResponse = z.infer<typeof EmployeeFinderResponse>;
 

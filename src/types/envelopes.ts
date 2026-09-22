@@ -42,6 +42,28 @@ const cursor_fields = <T extends z.ZodType>(item: T) => ({
 });
 
 /**
+ * The paging scalars the one offset-paginated endpoint returns alongside its
+ * `results` — the offset counterpart to {@link cursor_fields}, and what
+ * `make_offset_page_promise` constrains its response to via `total_pages`.
+ *
+ * Exported as fields rather than wrapped in an envelope factory because the sole
+ * offset endpoint (`search.employee_finder`) prefixes an endpoint-specific
+ * `company_linkedin_url`; spreading these after it keeps the API's field order.
+ * Note the wire order genuinely differs from the cursor envelope (`results` last,
+ * `max_results` before `results_length`) — hence two shapes, not one parameterised
+ * one.
+ */
+export const offset_fields = <T extends z.ZodType>(item: T) => ({
+  max_results: z.number().nullish(),
+  results_length: z.number().nullish(),
+  /** 1-based index of this page. */
+  page: z.number().nullish(),
+  /** Total pages available; paging stops once `page` reaches it. */
+  total_pages: z.number().nullish(),
+  results: blitzList(item),
+});
+
+/**
  * Build a cursor-paginated `/v2` response schema around its item type.
  *
  * The resulting shape is what `make_cursor_page_promise` constrains its response

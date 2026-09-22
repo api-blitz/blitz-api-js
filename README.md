@@ -138,9 +138,10 @@ later are preserved, typed as `unknown`):
 }
 ```
 
-`experiences[]` carries the person's **whole career** in profile order. Need the full
-profile from a LinkedIn URL alone? `client.enrichment.person({ person_linkedin_url })`
-returns the same `person` shape (1 record on success, free on a miss):
+`experiences[]` on a **search** result carries only the position that matched your query
+(since 2026-09-21). Need the person's whole career, in profile order?
+`client.enrichment.person({ person_linkedin_url })` returns the same `person` shape with
+every position they have held (1 record on success, free on a miss):
 
 ```ts
 const { found, person } = await client.enrichment.person({

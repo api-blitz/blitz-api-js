@@ -1,7 +1,7 @@
 /** The Company resource: `client.company`. */
 
 import type { BlitzAPI } from "../client.js";
-import { make_cursor_page_promise, type PagePromise } from "../pagination.js";
+import type { PagePromise } from "../pagination.js";
 import {
   type TamByJobsMatch,
   TamByJobsResponse,
@@ -9,6 +9,7 @@ import {
   TamByPeopleResponse,
 } from "../types/company.js";
 import type { RequestOptions, TamByJobsParams, TamByPeopleParams } from "../types/filters.js";
+import { cursor_page } from "./paginate.js";
 
 const TAM_BY_JOBS = "/v2/company/tam-by-jobs";
 const TAM_BY_PEOPLE = "/v2/company/tam-by-people";
@@ -29,12 +30,10 @@ export class CompanyResource {
    * result returned**; bound spend with `max_items`.
    */
   tam_by_jobs(
-    { max_items, ...params }: TamByJobsParams = {},
+    params: TamByJobsParams = {},
     options?: RequestOptions,
   ): PagePromise<TamByJobsMatch, TamByJobsResponse> {
-    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
-      this.client.request("POST", TAM_BY_JOBS, { ...params, cursor }, TamByJobsResponse, options),
-    );
+    return cursor_page(this.client, TAM_BY_JOBS, params, TamByJobsResponse, options);
   }
 
   /**
@@ -55,17 +54,9 @@ export class CompanyResource {
    * `cursor` is `null` (the `PagePromise` already does).
    */
   tam_by_people(
-    { max_items, ...params }: TamByPeopleParams = {},
+    params: TamByPeopleParams = {},
     options?: RequestOptions,
   ): PagePromise<TamByPeopleMatch, TamByPeopleResponse> {
-    return make_cursor_page_promise(params.cursor, max_items, (cursor) =>
-      this.client.request(
-        "POST",
-        TAM_BY_PEOPLE,
-        { ...params, cursor },
-        TamByPeopleResponse,
-        options,
-      ),
-    );
+    return cursor_page(this.client, TAM_BY_PEOPLE, params, TamByPeopleResponse, options);
   }
 }

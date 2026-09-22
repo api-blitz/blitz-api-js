@@ -86,9 +86,6 @@ describe("response models", () => {
     expect(company?.linkedin_id).toBe(1441);
     expect(company?.hq?.region).toBe("NORAM");
     expect(company?.specialties).toEqual(["search", "cloud"]);
-    expect(company?.slogan).toBe("Organize the world's information");
-    expect(company?.revenue).toBe(350000000000);
-    expect(company?.employee_growth[0]).toEqual({ percentage: 12.5, timespan: "1 year" });
   });
 
   it("parses job search with a nested job", () => {
@@ -260,7 +257,6 @@ describe("response models", () => {
       "DomainToLinkedinMatch",
       "Education",
       "EmailMatch",
-      "EmployeeGrowth",
       "Experience",
       "FairUsage",
       "FairUsageRateLimit",
@@ -337,12 +333,6 @@ describe("response models", () => {
     expect(person.person?.education).toEqual([]);
     expect(person.person?.certifications).toEqual([]);
 
-    // Same for the newest list field on the company side.
-    const company = CompanyEnrichmentResponse.parse({
-      found: true,
-      company: { name: "Y", employee_growth: null },
-    });
-    expect(company.company?.employee_growth).toEqual([]);
     // `specialties`, which the API documents as genuinely nullable, must stay null.
     expect(
       CompanyEnrichmentResponse.parse({ found: true, company: { specialties: null } }).company
