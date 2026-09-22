@@ -9,6 +9,7 @@ import {
   EmailEnrichmentResponse,
   EmailToPersonResponse,
   LinkedinToDomainResponse,
+  PersonEnrichmentResponse,
   PhoneEnrichmentResponse,
   PhoneToPersonResponse,
 } from "../types/enrichment.js";
@@ -21,6 +22,7 @@ import type {
   RequestOptions,
 } from "../types/filters.js";
 
+const PERSON = "/v2/enrichment/person";
 const EMAIL = "/v2/enrichment/email";
 const PHONE = "/v2/enrichment/phone";
 const EMAIL_TO_PERSON = "/v2/enrichment/email-to-person";
@@ -33,6 +35,21 @@ const COMPANY_DISTRIBUTION_BY_DEPARTMENT = "/v2/enrichment/company-distribution-
 
 export class EnrichmentResource {
   constructor(private readonly client: BlitzAPI) {}
+
+  /**
+   * Enrich a person from their LinkedIn profile URL: their whole career
+   * (`experiences[]`, in profile order), education, skills, and certifications.
+   *
+   * The profile-first counterpart to the reverse lookups — use it when you
+   * already hold a LinkedIn URL and want the full profile rather than a single
+   * contact point. Costs **1 record on success**; `found: false` is free.
+   */
+  person(
+    params: PersonLinkedinUrlParams,
+    options?: RequestOptions,
+  ): Promise<PersonEnrichmentResponse> {
+    return this.client.request("POST", PERSON, params, PersonEnrichmentResponse, options);
+  }
 
   /** Find a verified work email from a LinkedIn profile URL. */
   email(

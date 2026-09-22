@@ -17,9 +17,12 @@ export const DEFAULT_TIMEOUT = 30;
 export const DEFAULT_MAX_RETRIES = 3;
 
 /**
- * Default client-side rate limit, applied **per endpoint** (one token bucket each),
- * mirroring the API, which limits each endpoint to 5 req/s independently on every
- * plan; your per-endpoint value is discoverable via `client.account.key_info()`.
+ * Default client-side rate limit, applied **per endpoint** (one token bucket each).
+ * The API limits each endpoint to 10 req/s independently — 50 on plans created
+ * before 2026-09-30 — so the default of 5 deliberately sits at half the lowest cap.
+ * It therefore leaves throughput on the table by design: raise it to your key's
+ * actual per-endpoint value, discoverable via `client.account.key_info()`
+ * (`max_requests_per_seconds`).
  */
 export const DEFAULT_RATE_LIMIT_RPS = 5;
 

@@ -128,7 +128,7 @@ later are preserved, typed as `unknown`):
 ```ts
 {
   full_name: "Jordan Lee",
-  headline: "VP of Engineering at Acme",
+  headline: "VP of Engineering | @Acme", // derived from the first position
   linkedin_url: "https://www.linkedin.com/in/example-person",
   location: { city: "San Francisco", state_code: "CA", country_code: "US", continent: "North America" },
   experiences: [
@@ -136,6 +136,19 @@ later are preserved, typed as `unknown`):
   ],
   // first_name, last_name, skills, education, certifications, … also present
 }
+```
+
+`experiences[]` on a **search** result carries the position that matched your query —
+in practice a single entry — not the person's career. (The API reference page still
+describes the old full-history behaviour; it is out of date, per the 2026-09-21 changelog
+entry.) Write your code for one position and don't index past it. If you need the whole
+career in profile order, `client.enrichment.person({ person_linkedin_url })` returns the
+same `person` shape with every position held (1 record on success, free on a miss):
+
+```ts
+const { found, person } = await client.enrichment.person({
+  person_linkedin_url: "https://www.linkedin.com/in/example-person",
+});
 ```
 
 And `enrichment.email(...)` returns:
@@ -169,8 +182,8 @@ All methods are grouped into seven namespaces:
 | `client.account` | `key_info()` |
 | `client.search` | `people()`, `companies()`, `employee_finder()`, `waterfall_icp()` |
 | `client.jobs` | `search()`, `company()` |
-| `client.company` | `tam_by_jobs()` |
-| `client.enrichment` | `email()`, `phone()`, `email_to_person()`, `phone_to_person()`, `company()`, `domain_to_linkedin()`, `linkedin_to_domain()`, `company_distribution_by_country()`, `company_distribution_by_department()` |
+| `client.company` | `tam_by_jobs()`, `tam_by_people()` |
+| `client.enrichment` | `person()`, `email()`, `phone()`, `email_to_person()`, `phone_to_person()`, `company()`, `domain_to_linkedin()`, `linkedin_to_domain()`, `company_distribution_by_country()`, `company_distribution_by_department()` |
 | `client.utils` | `current_date()` |
 | `client.changelog` | `list()` |
 
@@ -181,20 +194,21 @@ from a union like `Industry` — or any raw string, so a value missing from the
 vendored taxonomy never blocks you.
 
 ```ts
-import { INDUSTRY } from "blitz-api-js"; // the full value array (534 industries)
+import { INDUSTRY } from "blitz-api-js"; // the full value array (535 industries)
 import type { CompanyFilter, Industry } from "blitz-api-js";
 ```
 
-The six list methods — `search.people`, `search.companies`, `search.employee_finder`,
-`jobs.search`, `jobs.company`, `company.tam_by_jobs` — return a paginated `PagePromise`
-instead of a plain response (see [Pagination](#pagination)). `waterfall_icp`,
-`changelog.list`, and the `enrichment`/`utils`/`account` methods return their response
-directly.
+The seven list methods — `search.people`, `search.companies`, `search.employee_finder`,
+`jobs.search`, `jobs.company`, `company.tam_by_jobs`, `company.tam_by_people` — return a
+paginated `PagePromise` instead of a plain response (see [Pagination](#pagination)).
+`waterfall_icp`, `changelog.list`, and the `enrichment`/`utils`/`account` methods return
+their response directly.
 
-`client.company.tam_by_jobs` builds a Total Addressable Market from live hiring signals
-— each result is a company plus how many of its current postings matched (1 record per
-result). `client.changelog.list` returns the **public** API changelog (no records, no
-key required, not paginated):
+The two `client.company` methods build a Total Addressable Market of companies, each
+result a company plus a match count (1 record per result): `tam_by_jobs` sizes accounts
+on **who they are hiring**, `tam_by_people` on **who already works there**.
+`client.changelog.list` returns the **public** API changelog (no records, no key
+required, not paginated):
 
 ```ts
 // TAM: companies hiring for a role, with ≥3 matching postings each.
@@ -207,6 +221,16 @@ for await (const match of client.company.tam_by_jobs({
   console.log(match.company?.name, match.matched_jobs);
 }
 
+// TAM: companies that already employ ≥3 of your buyer persona.
+for await (const match of client.company.tam_by_people({
+  people: { job_title: { include: ["Head of Sales"] }, min_per_company: 3 },
+  company: { industry: { include: ["Software Development"] } },
+  max_results: 50,
+  max_items: 200,
+})) {
+  console.log(match.company?.name, match.matched_people);
+}
+
 // Public changelog, last 30 days.
 const entries = await client.changelog.list({ days: 30 });
 for (const e of entries) console.log(e.date, e.type, e.title);
@@ -214,8 +238,9 @@ for (const e of entries) console.log(e.date, e.type, e.title);
 
 ## Pagination
 
-`search.people`, `search.companies`, `jobs.search`, `jobs.company` and
-`company.tam_by_jobs` are **cursor**-paginated; `search.employee_finder` is
+`search.people`, `search.companies`, `jobs.search`, `jobs.company`,
+`company.tam_by_jobs` and `company.tam_by_people` are **cursor**-paginated;
+`search.employee_finder` is
 **page**-paginated. Each returns a `PagePromise` you can either `await` for the first
 page or `for await` to stream every item across all pages — each page is fetched on
 demand, through the client's rate limiter.
@@ -286,12 +311,14 @@ await client.enrichment.email({ person_linkedin_url: "…" }, { timeout: 5 });
 ```
 
 The client-side rate limiter is a token bucket applied **per endpoint**, mirroring the API,
-whose limit is itself per endpoint (5 req/s on each endpoint independently by default — e.g.
+whose limit is itself per endpoint (10 req/s on each endpoint independently — e.g.
 `enrichment.email` and `enrichment.phone` get separate budgets; check yours via
 `(await client.account.key_info()).max_requests_per_seconds`). Each endpoint gets its own
 bucket that admits at most `rate_limit_rps` requests per second, so a single client instance
-stays under the limit on every endpoint, and a burst on one never throttles another. Across
-multiple processes you may still hit `429` — the retry path handles that.
+stays under the limit on every endpoint, and a burst on one never throttles another. The
+default `5` deliberately sits at half the cap — raise it to your key's
+`max_requests_per_seconds` to use the full budget. Across multiple processes you may still
+hit `429` — the retry path handles that.
 
 ## Usage & rate limit (`fair_usage`)
 
@@ -330,7 +357,7 @@ import {
   APITimeoutError,
   AuthenticationError,
   BlitzError,
-  FairUsageLimitError,
+  InsufficientRecordsError,
   NotFoundError,
   RateLimitError,
   ServerError,
@@ -339,7 +366,7 @@ import {
 try {
   await client.enrichment.email({ person_linkedin_url: "..." });
 } catch (err) {
-  if (err instanceof FairUsageLimitError) {
+  if (err instanceof InsufficientRecordsError) {
     // 402 — Fair Use record limit reached
   } else if (err instanceof AuthenticationError) {
     // 401 — bad key
@@ -353,9 +380,12 @@ try {
 }
 ```
 
-`InsufficientCreditsError` is still exported as a **deprecated** alias for
-`FairUsageLimitError`. It is the same class, not a subclass, so existing `instanceof`
-checks keep working; it will be removed in a future major.
+The 402 class is **`InsufficientRecordsError`** as of 3.0.0, matching `blitz-api-py`;
+`FairUsageLimitError` stays exported as a **deprecated** alias for the same class (so
+`instanceof` keeps working) and goes in 4.0.0. One catch: `err.name` is
+`"InsufficientRecordsError"` from 3.0.0 on, so if you compare that string rather than
+using `instanceof`, update it now. The older `InsufficientCreditsError` alias, deprecated
+in 2.0.0, is **removed** in this release.
 
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
 `max_retries`; `401`/`402`/`404` throw immediately. A **pre-response** network

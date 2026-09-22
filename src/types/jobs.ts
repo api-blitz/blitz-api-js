@@ -1,8 +1,9 @@
 /** Response models for the Jobs resource. */
 
 import * as z from "zod";
-import { blitzList, blitzObject } from "./models.js";
-import { FairUsage, Location } from "./shared.js";
+import { search_envelope } from "./envelopes.js";
+import { blitzObject } from "./models.js";
+import { Location } from "./shared.js";
 
 /**
  * A single job posting returned by `jobs.search` and `jobs.company`.
@@ -25,25 +26,9 @@ export const Job = blitzObject({
 export type Job = z.infer<typeof Job>;
 
 /** Cursor-paginated result of `jobs.search`. */
-export const JobSearchResponse = blitzObject({
-  total_results: z.number().nullish(),
-  results: blitzList(Job),
-  results_length: z.number().nullish(),
-  max_results: z.number().nullish(),
-  cursor: z.string().nullish(),
-  /** Record usage, rate limit, and tracing data for this request. */
-  fair_usage: FairUsage.nullish(),
-});
+export const JobSearchResponse = search_envelope(Job);
 export type JobSearchResponse = z.infer<typeof JobSearchResponse>;
 
 /** Cursor-paginated result of `jobs.company`. */
-export const CompanyJobsResponse = blitzObject({
-  total_results: z.number().nullish(),
-  results: blitzList(Job),
-  results_length: z.number().nullish(),
-  max_results: z.number().nullish(),
-  cursor: z.string().nullish(),
-  /** Record usage, rate limit, and tracing data for this request. */
-  fair_usage: FairUsage.nullish(),
-});
+export const CompanyJobsResponse = search_envelope(Job);
 export type CompanyJobsResponse = z.infer<typeof CompanyJobsResponse>;

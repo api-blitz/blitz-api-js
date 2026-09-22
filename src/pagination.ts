@@ -15,6 +15,18 @@
 
 import { BlitzError } from "./errors.js";
 
+/** The envelope every cursor-paginated endpoint returns (see `types/envelopes.ts`). */
+export interface CursorEnvelope<TItem> {
+  results: TItem[];
+  cursor?: string | null;
+}
+
+/** The envelope the one offset-paginated endpoint returns. */
+export interface OffsetEnvelope<TItem> {
+  results: TItem[];
+  total_pages?: number | null;
+}
+
 /** One page of results plus the cross-page iteration helpers. */
 export abstract class Page<TItem, TResponse> {
   constructor(
@@ -56,35 +68,41 @@ export abstract class Page<TItem, TResponse> {
  * instead of looping forever (which `for await` / {@link Page.iter_pages} would
  * otherwise do).
  */
-export class CursorPage<TItem, TResponse> extends Page<TItem, TResponse> {
+export class CursorPage<TItem, TResponse extends CursorEnvelope<TItem>> extends Page<
+  TItem,
+  TResponse
+> {
   /** The cursor that was sent to fetch `response` (`undefined` for the first page). */
   readonly #requested_cursor: string | undefined;
   readonly #fetch_page: (cursor?: string) => Promise<TResponse>;
-  readonly #get_items: (response: TResponse) => TItem[];
-  readonly #get_cursor: (response: TResponse) => string | null | undefined;
 
   constructor(
     response: TResponse,
     requested_cursor: string | undefined,
     fetch_page: (cursor?: string) => Promise<TResponse>,
-    get_items: (response: TResponse) => TItem[],
-    get_cursor: (response: TResponse) => string | null | undefined,
   ) {
-    super(get_items(response), response);
+    super(response.results, response);
     this.#requested_cursor = requested_cursor;
     this.#fetch_page = fetch_page;
-    this.#get_items = get_items;
-    this.#get_cursor = get_cursor;
+  }
+
+  /**
+   * The cursor to request next, or `undefined` once the walk is complete.
+   * Single source of truth for "is there a next page", so `has_next_page` and
+   * `get_next_page` can't disagree about what a usable cursor looks like.
+   */
+  #next_cursor(): string | undefined {
+    const cursor = this.response.cursor;
+    return typeof cursor === "string" && cursor.length > 0 ? cursor : undefined;
   }
 
   has_next_page(): boolean {
-    const cursor = this.#get_cursor(this.response);
-    return typeof cursor === "string" && cursor.length > 0;
+    return this.#next_cursor() !== undefined;
   }
 
   async get_next_page(): Promise<CursorPage<TItem, TResponse>> {
-    const cursor = this.#get_cursor(this.response);
-    if (typeof cursor !== "string" || cursor.length === 0) {
+    const cursor = this.#next_cursor();
+    if (cursor === undefined) {
       throw new BlitzError("No next page: the previous response returned a null cursor.");
     }
     if (cursor === this.#requested_cursor) {
@@ -93,35 +111,38 @@ export class CursorPage<TItem, TResponse> extends Page<TItem, TResponse> {
           "Aborting to avoid an infinite pagination loop.",
       );
     }
-    const next = await this.#fetch_page(cursor);
-    return new CursorPage(next, cursor, this.#fetch_page, this.#get_items, this.#get_cursor);
+    return new CursorPage(await this.#fetch_page(cursor), cursor, this.#fetch_page);
   }
 }
 
 /** Offset-paginated page: increments `page` until it exceeds `total_pages`. */
-export class OffsetPage<TItem, TResponse> extends Page<TItem, TResponse> {
+export class OffsetPage<TItem, TResponse extends OffsetEnvelope<TItem>> extends Page<
+  TItem,
+  TResponse
+> {
   readonly #page: number;
   readonly #fetch_page: (page: number) => Promise<TResponse>;
-  readonly #get_items: (response: TResponse) => TItem[];
-  readonly #get_total_pages: (response: TResponse) => number | null | undefined;
 
-  constructor(
-    response: TResponse,
-    page: number,
-    fetch_page: (page: number) => Promise<TResponse>,
-    get_items: (response: TResponse) => TItem[],
-    get_total_pages: (response: TResponse) => number | null | undefined,
-  ) {
-    super(get_items(response), response);
+  constructor(response: TResponse, page: number, fetch_page: (page: number) => Promise<TResponse>) {
+    super(response.results, response);
     this.#page = page;
     this.#fetch_page = fetch_page;
-    this.#get_items = get_items;
-    this.#get_total_pages = get_total_pages;
   }
 
+  /**
+   * An empty page ends the walk even with pages left on the counter. An offset walk
+   * that has run past the real end keeps returning empty pages, so a stale or
+   * over-counted `total_pages` — plausible here, where the underlying set can shrink
+   * mid-walk — would otherwise spend every remaining page fetching nothing.
+   *
+   * Deliberately *not* symmetric with {@link CursorPage}, which keeps paging through
+   * an empty page while the cursor is live: there a sparse intermediate page can be
+   * followed by a full one, so the same guard would truncate a valid walk. Mirrors
+   * `AsyncPageNumberPage.has_next_page` in `blitz-api-py`.
+   */
   has_next_page(): boolean {
-    const total = this.#get_total_pages(this.response);
-    return typeof total === "number" && this.#page < total;
+    const total = this.response.total_pages;
+    return typeof total === "number" && this.#page < total && this.data.length > 0;
   }
 
   async get_next_page(): Promise<OffsetPage<TItem, TResponse>> {
@@ -129,14 +150,7 @@ export class OffsetPage<TItem, TResponse> extends Page<TItem, TResponse> {
       throw new BlitzError("No next page: reached the last page.");
     }
     const next_page = this.#page + 1;
-    const next = await this.#fetch_page(next_page);
-    return new OffsetPage(
-      next,
-      next_page,
-      this.#fetch_page,
-      this.#get_items,
-      this.#get_total_pages,
-    );
+    return new OffsetPage(await this.#fetch_page(next_page), next_page, this.#fetch_page);
   }
 }
 
@@ -222,28 +236,22 @@ export class PagePromise<TItem, TResponse>
 /**
  * Build a {@link PagePromise} for a cursor-paginated endpoint.
  *
- * The resource method supplies `fetch_page` (which sends the request for a given
- * cursor) plus the accessors that pull the items and the next cursor out of a
- * response; `search.people`, `search.companies`, `jobs.search` and `jobs.company`
- * all share this one path.
+ * The caller supplies only `fetch_page` (which sends the request for a given
+ * cursor). Because every cursor response is built by `cursor_envelope`, `results`
+ * and `cursor` are reachable structurally through the {@link CursorEnvelope}
+ * constraint, so nothing anywhere passes accessors — {@link CursorPage} reads the
+ * two fields off the response directly. The six cursor methods
+ * (`search.people`/`companies`, `jobs.search`/`company`,
+ * `company.tam_by_jobs`/`tam_by_people`) all share this one path.
  */
-export function make_cursor_page_promise<TItem, TResponse>(
+export function make_cursor_page_promise<TItem, TResponse extends CursorEnvelope<TItem>>(
   initial_cursor: string | undefined,
   max_items: number | undefined,
   fetch_page: (cursor?: string) => Promise<TResponse>,
-  get_items: (response: TResponse) => TItem[],
-  get_cursor: (response: TResponse) => string | null | undefined,
 ): PagePromise<TItem, TResponse> {
   return new PagePromise<TItem, TResponse>(
     fetch_page(initial_cursor).then(
-      (response) =>
-        new CursorPage<TItem, TResponse>(
-          response,
-          initial_cursor,
-          fetch_page,
-          get_items,
-          get_cursor,
-        ),
+      (response) => new CursorPage<TItem, TResponse>(response, initial_cursor, fetch_page),
     ),
     max_items,
   );
@@ -255,23 +263,14 @@ export function make_cursor_page_promise<TItem, TResponse>(
  * the two pagination styles have different shapes, so one generic paginator would
  * be more indirection than it's worth.
  */
-export function make_offset_page_promise<TItem, TResponse>(
+export function make_offset_page_promise<TItem, TResponse extends OffsetEnvelope<TItem>>(
   start_page: number,
   max_items: number | undefined,
   fetch_page: (page: number) => Promise<TResponse>,
-  get_items: (response: TResponse) => TItem[],
-  get_total_pages: (response: TResponse) => number | null | undefined,
 ): PagePromise<TItem, TResponse> {
   return new PagePromise<TItem, TResponse>(
     fetch_page(start_page).then(
-      (response) =>
-        new OffsetPage<TItem, TResponse>(
-          response,
-          start_page,
-          fetch_page,
-          get_items,
-          get_total_pages,
-        ),
+      (response) => new OffsetPage<TItem, TResponse>(response, start_page, fetch_page),
     ),
     max_items,
   );

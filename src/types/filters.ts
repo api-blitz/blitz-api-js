@@ -34,13 +34,33 @@ export type SeniorityValue = Seniority | (string & {});
 export type EmploymentTypeValue = EmploymentType | (string & {});
 export type WorkArrangementValue = WorkArrangement | (string & {});
 
-/** Free-text include/exclude keyword filter. */
+/**
+ * Free-text include/exclude keyword filter.
+ *
+ * Every filter list on the search endpoints is capped at **50 entries** server
+ * side; a longer list is rejected with a `422`. Split a longer list across
+ * several requests.
+ */
 export interface KeywordFilter {
   include?: string[];
   exclude?: string[];
 }
 
-/** Include/exclude filter over the fixed industry taxonomy. */
+/**
+ * Include/exclude filter over the fixed industry taxonomy.
+ *
+ * `"Unknown"` is a sentinel, not a real industry. In `include` it is added to the
+ * industries you list (`["Banking", "Unknown"]` returns banks plus the sentinel's
+ * matches); in `exclude` it drops them. Added 2026-09-16 — before it, reaching those
+ * records meant listing every other industry in `exclude`, which the 50-entry cap made
+ * impossible.
+ *
+ * What it matches depends on the endpoint. On `search.companies` it is a company with
+ * **no industry value**. On the people- and job-side endpoints (`search.people`,
+ * `company.tam_by_people`, `jobs.*`, `company.tam_by_jobs`), where this filter sits
+ * under `company.industry`, it matches those **and** — since 2026-09-17 — records with
+ * **no company attached at all**; `exclude` drops both groups.
+ */
 export interface IndustryFilter {
   include?: IndustryValue[];
   exclude?: IndustryValue[];
@@ -58,7 +78,15 @@ export interface LastFundingTypeFilter {
   exclude?: LastFundingTypeValue[];
 }
 
-/** Numeric range filter. `0` means unset for most fields. */
+/**
+ * Numeric range filter. `0` means unset for most fields, and a `max` of `0`
+ * specifically means **no upper bound**.
+ *
+ * Since 2026-09-16 a range whose `min` is above its `max` is rejected with a
+ * `422` naming the field. Previously it was accepted and silently misbehaved —
+ * `company.revenue` failed with a `500`, every other range returned no results —
+ * so this surfaces as a thrown `APIStatusError` rather than an empty page.
+ */
 export interface RangeFilter {
   min?: number;
   max?: number;
@@ -73,11 +101,14 @@ export interface CompanyHQFilter {
   sales_region?: SalesRegionValue[];
 }
 
-/** Company search criteria, shared by `search.companies` and `search.people`. */
+/**
+ * Company search criteria, shared by `search.companies`, `search.people` and
+ * `company.tam_by_people`.
+ *
+ * `linkedin_url` is **not** here: only the people-side endpoints honour it, and
+ * `search.companies` accepts-then-ignores it — see {@link PeopleCompanyFilter}.
+ */
 export interface CompanyFilter {
-  /** Match specific companies by LinkedIn URL. Applied on `search.people` only;
-   * `search.companies` ignores it. */
-  linkedin_url?: string[];
   name?: KeywordFilter;
   industry?: IndustryFilter;
   type?: CompanyTypeFilter;
@@ -99,6 +130,22 @@ export interface CompanyFilter {
   hq?: CompanyHQFilter;
 }
 
+/**
+ * Company criteria for the people-side searches — the same shape as
+ * {@link CompanyFilter} plus the `linkedin_url` filter that only `search.people`
+ * and `company.tam_by_people` honour.
+ *
+ * Extending (rather than leaving the field on the shared filter) keeps it off
+ * `search.companies`, which accepts it and then silently returns results for the
+ * other criteria — the same accepted-but-ignored failure mode that got
+ * `linkedin_url` removed from {@link PeopleFilter}, and the same split as
+ * {@link TamPeopleFilter} over {@link PeopleFilter}.
+ */
+export interface PeopleCompanyFilter extends CompanyFilter {
+  /** Match specific companies by LinkedIn URL (server caps the list at 50). */
+  linkedin_url?: string[];
+}
+
 /** Job-title filter. Wrap a value in `[brackets]` for an exact match. */
 export interface PeopleJobTitleFilter {
   include_linkedin_headline?: boolean;
@@ -115,10 +162,16 @@ export interface PeopleLocationFilter {
   sales_region?: SalesRegionValue[];
 }
 
-/** People search criteria for `search.people`. */
+/**
+ * People search criteria, shared by `search.people` and
+ * `company.tam_by_people`.
+ *
+ * `linkedin_url` is **not** here: `/v2/search/people` stopped accepting it on
+ * 2026-09-11 (a request that still sends it succeeds but silently ignores the
+ * filter), and it survives only on `company.tam_by_people` — see
+ * {@link TamPeopleFilter}.
+ */
 export interface PeopleFilter {
-  /** Match specific people by their LinkedIn profile URL (server caps at 50). */
-  linkedin_url?: string[];
   job_title?: PeopleJobTitleFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
@@ -203,6 +256,24 @@ export interface TamJobFilter extends JobFilter {
   min_per_company?: number;
 }
 
+/**
+ * People criteria for `company.tam_by_people` — the same shape as
+ * {@link PeopleFilter} plus a per-company floor and the `linkedin_url` filter
+ * that `search.people` no longer honours. Extending (rather than widening
+ * `PeopleFilter`) keeps the shared filter, which has neither field, clean —
+ * the same split as {@link TamJobFilter} over {@link JobFilter}.
+ */
+export interface TamPeopleFilter extends PeopleFilter {
+  /** Match specific people by their LinkedIn profile URL (server caps at 50). */
+  linkedin_url?: string[];
+  /**
+   * Only include companies with at least this many matching employees
+   * (integer, 0–25; `0` = unset). When it filters heavily a page may come back
+   * partial — keep paging until `cursor` is `null`.
+   */
+  min_per_company?: number;
+}
+
 /** Include-only filter over the LinkedIn size buckets. The API exposes no `exclude` here. */
 export interface CompanySizeFilter {
   include?: EmployeeRangeValue[];
@@ -235,59 +306,49 @@ export interface JobCompanyFilter {
 // Method parameter shapes (the request body for each endpoint, snake_case).
 // ---------------------------------------------------------------------------
 
-export interface PeopleSearchParams {
-  company?: CompanyFilter;
+/**
+ * The paging controls every cursor-paginated method accepts.
+ *
+ * `max_results` is the **page size**, not a total: the API bills 1 record per
+ * result returned, so a bare `for await` streams every match up to the server
+ * limit. Bound the total with `max_items`.
+ */
+export interface CursorPaginatedParams {
+  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
+  max_results?: number;
+  /** Pass back the `cursor` from the previous page; `null` there means the walk is done. */
+  cursor?: string;
+  /**
+   * Client-side cap on the **total** items streamed via `for await` / `collect()`
+   * across all pages; stops fetching once reached. Not sent on the wire — set
+   * `max_results` to bound the per-page (and therefore per-page billing) size.
+   */
+  max_items?: number;
+}
+
+/** The paging controls the one offset-paginated method (`search.employee_finder`) accepts. */
+export interface OffsetPaginatedParams extends Omit<CursorPaginatedParams, "cursor"> {
+  /** 1-based page number. Defaults to 1. */
+  page?: number;
+}
+
+export interface PeopleSearchParams extends CursorPaginatedParams {
+  company?: PeopleCompanyFilter;
   people?: PeopleFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface CompanySearchParams {
+export interface CompanySearchParams extends CursorPaginatedParams {
   company?: CompanyFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface JobSearchParams {
+export interface JobSearchParams extends CursorPaginatedParams {
   job?: JobFilter;
   company?: JobCompanyFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface CompanyJobsParams {
+export interface CompanyJobsParams extends CursorPaginatedParams {
   company_linkedin_url: string;
   job?: JobFilter;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
 /**
@@ -295,25 +356,31 @@ export interface CompanyJobsParams {
  * companies from live hiring signals (each result is a company plus how many of
  * its current postings matched). Cursor-paginated. The API bills **1 record per
  * result returned** (up to `max_results`). Can raise `AuthenticationError` (401),
- * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ * `InsufficientRecordsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
-export interface TamByJobsParams {
+export interface TamByJobsParams extends CursorPaginatedParams {
   /** Job-level filters plus `min_per_company` (see {@link TamJobFilter}). */
   job?: TamJobFilter;
   /** Company firmographics — the same block as `jobs.search` ({@link JobCompanyFilter}). */
   company?: JobCompanyFilter;
-  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
-  max_results?: number;
-  cursor?: string;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
-export interface EmployeeFinderParams {
+/**
+ * Params for `company.tam_by_people` — build a Total Addressable Market of
+ * companies from the people who already work there (each result is a company
+ * plus how many of its current employees matched). Takes the same filters as
+ * `search.people`. Cursor-paginated. The API bills **1 record per result
+ * returned** (up to `max_results`). Can raise `AuthenticationError` (401),
+ * `InsufficientRecordsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ */
+export interface TamByPeopleParams extends CursorPaginatedParams {
+  /** Company firmographics — the same block as `search.people` ({@link PeopleCompanyFilter}). */
+  company?: PeopleCompanyFilter;
+  /** People filters plus `linkedin_url`/`min_per_company` (see {@link TamPeopleFilter}). */
+  people?: TamPeopleFilter;
+}
+
+export interface EmployeeFinderParams extends OffsetPaginatedParams {
   company_linkedin_url: string;
   country_code?: string[];
   continent?: ContinentValue[];
@@ -321,26 +388,18 @@ export interface EmployeeFinderParams {
   job_level?: JobLevelValue[];
   job_function?: JobFunctionValue[];
   min_connections_count?: number;
-  /** Results **per page** (1–50). The API bills 1 record per result returned. */
-  max_results?: number;
-  page?: number;
-  /**
-   * Client-side cap on the **total** items streamed via `for await` / `collect()`
-   * across all pages; stops fetching once reached. Not sent on the wire — set
-   * `max_results` to bound the per-page (and therefore per-page billing) size.
-   */
-  max_items?: number;
 }
 
 export interface WaterfallIcpParams {
   company_linkedin_url: string;
+  /** Tiers tried in priority order. Capped at **10** steps server side. */
   cascade: CascadeTier[];
-  /** Minimum LinkedIn connections for a match. Server defaults to 200. */
+  /** Minimum LinkedIn connections for a match. Server defaults to `0`. */
   profile_min_connections?: number;
   max_results?: number;
 }
 
-/** Params for `enrichment.email` and `enrichment.phone`. */
+/** Params for `enrichment.person`, `enrichment.email`, and `enrichment.phone`. */
 export interface PersonLinkedinUrlParams {
   person_linkedin_url: string;
 }

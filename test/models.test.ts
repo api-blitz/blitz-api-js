@@ -1,6 +1,8 @@
 /** The hand-written Zod schemas must match the API's example shapes. */
 
 import { describe, expect, it } from "vitest";
+import * as z from "zod";
+import * as api from "../src/index.js";
 import {
   ChangelogResponse,
   CompanyDistributionByCountryResponse,
@@ -18,9 +20,11 @@ import {
   KeyInfo,
   LinkedinToDomainResponse,
   PeopleSearchResponse,
+  PersonEnrichmentResponse,
   PhoneEnrichmentResponse,
   PhoneToPersonResponse,
   TamByJobsResponse,
+  TamByPeopleResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
 import * as data from "./data.js";
@@ -56,16 +60,20 @@ describe("response models", () => {
     expect(person?.location?.country_code).toBe("US");
     expect(person?.experiences[0]?.company_name).toBe("Google");
     expect(person?.experiences[0]?.job_location?.city).toBe("Sunnyvale");
-    expect(person?.education[0]?.degree).toBe("Bachelor's degree");
+    expect(person?.experiences[0]?.job_contract_type).toBe("Full-time");
+    expect(person?.experiences[0]?.job_work_arrangement).toBe("Hybrid");
+    expect(person?.location?.postal_code).toBe("94089");
+    expect(person?.location?.street_address).toBe("1600 Amphitheatre Parkway");
+    // `degree` carries the field of study; the API removed `field_of_study` on 2026-09-15.
+    expect(person?.education[0]?.degree).toBe("Bachelor of Science, Computer Science");
     expect(person?.education[0]?.school_name).toBe("Stanford University");
-    expect(person?.education[0]?.field_of_study).toBe("Computer Science");
     expect(person?.certifications[0]?.authority).toBe("Google");
     // Guard the field names on the schema itself: `blitzObject` preserves unknown keys,
-    // so a value assertion alone would still pass if `school_name` regressed to `school`.
+    // so a value assertion alone would still pass if `school_name` regressed to `school`
+    // or if the dropped `field_of_study` crept back in.
     expect(Object.keys(Education.shape).sort()).toEqual([
       "degree",
       "end_date",
-      "field_of_study",
       "school_name",
       "start_date",
     ]);
@@ -184,6 +192,30 @@ describe("response models", () => {
     expect((resp as Record<string, unknown>).total_results).toBeUndefined();
   });
 
+  it("parses person enrichment (whole career on the nested person)", () => {
+    const resp = PersonEnrichmentResponse.parse(data.PERSON_ENRICHMENT);
+    expect(resp.found).toBe(true);
+    expect(resp.person?.linkedin_url).toBe("https://www.linkedin.com/in/beulah-lee");
+    expect(resp.person?.experiences[0]?.job_title).toBe("Software Engineer");
+    expect(resp.person?.skills).toEqual(["python"]);
+  });
+
+  it("parses a person-enrichment miss (found: false, person: null)", () => {
+    const resp = PersonEnrichmentResponse.parse(data.PERSON_ENRICHMENT_NOT_FOUND);
+    expect(resp.found).toBe(false);
+    expect(resp.person).toBeNull();
+    expect(resp.fair_usage?.records_used).toBe(0);
+  });
+
+  it("parses tam by people (a company + matched_people, no total_results)", () => {
+    const resp = TamByPeopleResponse.parse(data.TAM_BY_PEOPLE);
+    expect(resp.results[0]?.matched_people).toBe(42);
+    expect(resp.results[0]?.company?.name).toBe("Google");
+    expect(resp.cursor).toBe("example_cursor_tam_people_p2");
+    // Like the TAM-by-jobs envelope, this one carries no total_results.
+    expect((resp as Record<string, unknown>).total_results).toBeUndefined();
+  });
+
   it("parses the fair_usage block every /v2 response carries", () => {
     const resp = EmailEnrichmentResponse.parse(data.EMAIL_ENRICHMENT);
     expect(resp.fair_usage?.records_used).toBe(3);
@@ -204,32 +236,52 @@ describe("response models", () => {
   });
 
   it("declares fair_usage on every /v2 response model", () => {
-    // The API attaches the block to every `/v2` endpoint; only the public
-    // `/changelog/` (a top-level array) is exempt.
-    const V2_RESPONSES = {
-      KeyInfo,
-      CurrentDateResponse,
-      PeopleSearchResponse,
-      CompanySearchResponse,
-      EmployeeFinderResponse,
-      WaterfallIcpResponse,
-      JobSearchResponse,
-      CompanyJobsResponse,
-      TamByJobsResponse,
-      EmailEnrichmentResponse,
-      PhoneEnrichmentResponse,
-      EmailToPersonResponse,
-      PhoneToPersonResponse,
-      CompanyEnrichmentResponse,
-      DomainToLinkedinResponse,
-      LinkedinToDomainResponse,
-      CompanyDistributionByCountryResponse,
-      CompanyDistributionByDepartmentResponse,
-    };
-    expect(Object.keys(V2_RESPONSES)).toHaveLength(18);
-    for (const [name, schema] of Object.entries(V2_RESPONSES)) {
-      expect(`${name}: ${Object.keys(schema.shape).includes("fair_usage")}`).toBe(`${name}: true`);
+    // The API attaches the block to every `/v2` endpoint, and `v2_response` makes that
+    // structural. This sweep is the backstop for the one way it can still be missed:
+    // building a response with bare `blitzObject`.
+    //
+    // It is deliberately an *exemption* list, not an inclusion rule. Matching on
+    // `name.endsWith("Response")` would silently skip any endpoint model named
+    // otherwise — `KeyInfo` is already proof that they exist — so instead every
+    // exported object schema must be either a known nested sub-model or carry
+    // `fair_usage`. A new model of any name forces a choice here rather than
+    // slipping through unchecked.
+    const SUB_MODELS = new Set([
+      "ActivePlan",
+      "Certification",
+      "ChangelogEntry",
+      "ChangelogLink",
+      "Company",
+      "CountryDistributionItem",
+      "DepartmentDistributionItem",
+      "DomainToLinkedinMatch",
+      "Education",
+      "EmailMatch",
+      "Experience",
+      "FairUsage",
+      "FairUsageRateLimit",
+      "HQ",
+      "Job",
+      "Location",
+      "Person",
+      "TamByJobsMatch",
+      "TamByPeopleMatch",
+      "WaterfallIcpMatch",
+    ]);
+
+    const missing: string[] = [];
+    const responses: string[] = [];
+    for (const [name, value] of Object.entries(api)) {
+      // ChangelogResponse is a top-level array, not a ZodObject, so it is skipped.
+      if (!(value instanceof z.ZodObject) || SUB_MODELS.has(name)) continue;
+      responses.push(name);
+      if (!Object.keys(value.shape).includes("fair_usage")) missing.push(name);
     }
+    expect(missing).toEqual([]);
+    // Sanity-check the exemption list itself still describes real exports, so a
+    // renamed or deleted sub-model can't quietly widen it.
+    expect([...SUB_MODELS].filter((name) => !(name in api))).toEqual([]);
+    expect(responses.length).toBeGreaterThanOrEqual(20);
   });
 
   it("parses a response that omits fair_usage (older deployment)", () => {
@@ -263,12 +315,31 @@ describe("response models", () => {
     });
     expect(resp.results).toEqual([]);
 
+    // Every list the spec types `array | null` must coerce, not reject. The API really
+    // does send `null` for an empty list on sparse profiles, and the sibling Python SDK
+    // hit a genuine ValidationError here before it grew the same coercion.
     const person = EmailToPersonResponse.parse({
       found: false,
-      person: { full_name: "X", experiences: null, skills: null },
+      person: {
+        full_name: "X",
+        experiences: null,
+        skills: null,
+        education: null,
+        certifications: null,
+      },
     });
     expect(person.person?.experiences).toEqual([]);
     expect(person.person?.skills).toEqual([]);
+    expect(person.person?.education).toEqual([]);
+    expect(person.person?.certifications).toEqual([]);
+
+    // `specialties` coerces like the other four: the runtime spec types it
+    // `array | null` exactly as it types `skills`, so it gets the same treatment
+    // rather than making callers write one extra null guard.
+    expect(
+      CompanyEnrichmentResponse.parse({ found: true, company: { specialties: null } }).company
+        ?.specialties,
+    ).toEqual([]);
 
     // An omitted list still defaults to [] (unchanged behavior).
     expect(KeyInfo.parse({ valid: true }).allowed_apis).toEqual([]);

@@ -1,11 +1,7 @@
 /** The Search resource: `client.search`. */
 
 import type { BlitzAPI } from "../client.js";
-import {
-  make_cursor_page_promise,
-  make_offset_page_promise,
-  type PagePromise,
-} from "../pagination.js";
+import type { PagePromise } from "../pagination.js";
 import type {
   CompanySearchParams,
   EmployeeFinderParams,
@@ -20,6 +16,7 @@ import {
   WaterfallIcpResponse,
 } from "../types/search.js";
 import type { Company, Person } from "../types/shared.js";
+import { cursor_page, offset_page } from "./paginate.js";
 
 const PEOPLE = "/v2/search/people";
 const COMPANIES = "/v2/search/companies";
@@ -35,17 +32,10 @@ export class SearchResource {
    * `await` for the first page (`.data`, `.response`, `.has_next_page()`).
    */
   people(
-    { max_items, ...params }: PeopleSearchParams = {},
+    params: PeopleSearchParams = {},
     options?: RequestOptions,
   ): PagePromise<Person, PeopleSearchResponse> {
-    return make_cursor_page_promise<Person, PeopleSearchResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request("POST", PEOPLE, { ...params, cursor }, PeopleSearchResponse, options),
-      (r) => r.results,
-      (r) => r.cursor,
-    );
+    return cursor_page(this.client, PEOPLE, params, PeopleSearchResponse, options);
   }
 
   /**
@@ -53,23 +43,10 @@ export class SearchResource {
    * Cursor-paginated (see {@link SearchResource.people}).
    */
   companies(
-    { max_items, ...params }: CompanySearchParams = {},
+    params: CompanySearchParams = {},
     options?: RequestOptions,
   ): PagePromise<Company, CompanySearchResponse> {
-    return make_cursor_page_promise<Company, CompanySearchResponse>(
-      params.cursor,
-      max_items,
-      (cursor) =>
-        this.client.request(
-          "POST",
-          COMPANIES,
-          { ...params, cursor },
-          CompanySearchResponse,
-          options,
-        ),
-      (r) => r.results,
-      (r) => r.cursor,
-    );
+    return cursor_page(this.client, COMPANIES, params, CompanySearchResponse, options);
   }
 
   /**
@@ -77,23 +54,10 @@ export class SearchResource {
    * `page` until it exceeds `total_pages`.
    */
   employee_finder(
-    { max_items, ...params }: EmployeeFinderParams,
+    params: EmployeeFinderParams,
     options?: RequestOptions,
   ): PagePromise<Person, EmployeeFinderResponse> {
-    return make_offset_page_promise<Person, EmployeeFinderResponse>(
-      params.page ?? 1,
-      max_items,
-      (page) =>
-        this.client.request(
-          "POST",
-          EMPLOYEE_FINDER,
-          { ...params, page },
-          EmployeeFinderResponse,
-          options,
-        ),
-      (r) => r.results,
-      (r) => r.total_pages,
-    );
+    return offset_page(this.client, EMPLOYEE_FINDER, params, EmployeeFinderResponse, options);
   }
 
   /**

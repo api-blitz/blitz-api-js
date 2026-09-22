@@ -86,7 +86,7 @@ describe("retry policy", () => {
     expect(sleeps.calls).toEqual([2]);
   });
 
-  it.each([400, 401, 402, 404])("does not retry client error %i", async (status) => {
+  it.each([400, 401, 402, 404, 422])("does not retry client error %i", async (status) => {
     const sleeps = new SleepRecorder();
     const ff = new FakeFetch([jsonResponse({ message: "nope" }, { status })]);
     await clientWith(ff.fetch, sleeps)

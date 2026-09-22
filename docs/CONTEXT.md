@@ -13,10 +13,11 @@
 The official **typed TypeScript SDK for the Blitz API** (https://blitz-api.ai), a
 B2B data / GTM REST API (people & company search, contact enrichment, utilities).
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
-behaves the same way over all 19 endpoints. `blitz-api-py` covers the same
+behaves the same way over all 21 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
 when changing any endpoint. (The `fair_usage` / `records_remaining` sync of
-2026-09-02 still needs mirroring in `blitz-api-py`.)
+2026-09-02 and the 2026-09-15 spec sync both still need mirroring in
+`blitz-api-py`.)
 
 Two design mandates:
 
@@ -33,11 +34,24 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 
 - **Base URL**: `https://api.blitz-api.ai`
 - **Auth**: `x-api-key` HTTP header (NOT `Authorization`).
-- **Rate limit**: 5 req/s **per endpoint** on all plans; your per-endpoint value in
-  `key_info.max_requests_per_seconds`.
-- **OpenAPI**: 3.1.0, version `2.0.0`. All endpoints are `/v2/...`.
+- **Rate limit**: 10 req/s **per endpoint** on all plans (legacy plans created before
+  2026-09-30 run at 50); your per-endpoint value in
+  `key_info.max_requests_per_seconds`. The SDK's `rate_limit_rps` default stays **5**,
+  deliberately half the cap.
+- **OpenAPI**: 3.1.0. The live runtime spec (`https://api.blitz-api.ai/openapi`)
+  reports `info.version` `1.0.0`; the docs-site mirror
+  (`https://docs.blitz-api.ai/api-reference/v2.openapi.json`) reports `2.0.0`. They
+  describe the same endpoints — see §3 for which to use for what. All endpoints are
+  `/v2/...` (plus the public `/changelog/`).
 - **Status conventions**: 401 invalid/missing key · 402 Fair Use limit reached ·
-  404 not found · 429 rate limited (wait 60s then retry) · 5xx server error.
+  404 not found · 422 invalid input (body `{success, error:{code, message}}`; documented
+  on `domain-to-linkedin`, but any endpoint can reject a malformed body — e.g. a filter
+  list over 50 entries) · 429 rate limited (wait 60s then retry) · **503 partial search
+  failure**, explicitly retriable, on `search.people`/`companies` and
+  `jobs.search`/`company` (since 2026-08-05 they return it instead of a truncated page) ·
+  5xx server error. The SDK already handles both correctly with no special-casing: 503
+  falls under `>= 500` so it retries as a `ServerError`, and 422 is a non-retried
+  `APIStatusError`.
 - **`fair_usage`**: every `/v2` response (and the `402` body) carries a per-request
   usage block — `records_used`, `records_remaining` (`number | "unlimited"`),
   `next_reset_at`, `rate_limit.{requests_per_second,remaining_this_second}`, and
@@ -45,7 +59,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   rate limited. Also mirrored in the `x-records-used`/`x-records-remaining` response
   headers; the SDK reads neither header.
 
-### Endpoint → method → response model (all 19)
+### Endpoint → method → response model (all 21)
 
 | HTTP | Path | SDK method | Response model |
 | --- | --- | --- | --- |
@@ -57,6 +71,8 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/jobs/search` | `jobs.search()` | `JobSearchResponse` |
 | POST | `/v2/jobs/company` | `jobs.company()` | `CompanyJobsResponse` |
 | POST | `/v2/company/tam-by-jobs` | `company.tam_by_jobs()` | `TamByJobsResponse` |
+| POST | `/v2/company/tam-by-people` | `company.tam_by_people()` | `TamByPeopleResponse` |
+| POST | `/v2/enrichment/person` | `enrichment.person()` | `PersonEnrichmentResponse` |
 | POST | `/v2/enrichment/email` | `enrichment.email()` | `EmailEnrichmentResponse` |
 | POST | `/v2/enrichment/phone` | `enrichment.phone()` | `PhoneEnrichmentResponse` |
 | POST | `/v2/enrichment/email-to-person` | `enrichment.email_to_person()` | `EmailToPersonResponse` |
@@ -71,22 +87,35 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 
 ### Re-deriving the API surface
 
-The full spec/docs are public: fetch the OpenAPI spec from
-`https://api.blitz-api.ai/openapi` and use `jq` against it for request schemas and
-response `example` blocks. The `.md` mirror of any docs page is at
-`https://docs.blitz-api.ai/<path>.md`.
+Everything is public, and there are **two** specs plus a changelog feed — use each
+for what it is actually good at:
+
+| Source | Use it for |
+| --- | --- |
+| `https://api.blitz-api.ai/openapi` (runtime) | **Request schemas and, since 2026-09-15, fully typed response `properties`** — the authority for field names/types/required-ness. Also what `pnpm gen:enums:fetch` pulls. |
+| `https://docs.blitz-api.ai/api-reference/v2.openapi.json` (docs mirror) | **Response `example` payloads** (its responses are still example-only) and prose descriptions/costs. Good source for test fixtures. |
+| `GET https://api.blitz-api.ai/changelog/` | What *changed* and when, with `affected_endpoints`. Start a sync here — it names the breaking changes. |
+
+The `.md` mirror of any docs page is at `https://docs.blitz-api.ai/<path>.md`, and
+the page index is `https://docs.blitz-api.ai/llms.txt`.
 
 ---
 
 ## 3. THE crux: why response models are hand-written
 
-The spec's **request** bodies are richly typed (nested objects, enums) — modeled
-precisely as TypeScript interfaces + generated enums. The spec's **response**
-bodies are example-only (`{"type":"object","example":{…}}`, no `properties`), so a
-generator would emit `unknown` for every response. Therefore **response models are
-hand-derived** from the example JSON (re-verified against the live docs) as Zod
-schemas. `z.looseObject` keeps unknown fields so additions don't break
-deserialization between SDK releases.
+Historically the spec's **request** bodies were richly typed (nested objects, enums)
+while its **response** bodies were example-only (`{"type":"object","example":{…}}`,
+no `properties`), so a generator would have emitted `unknown` for every response.
+That is why response models are **hand-derived** Zod schemas.
+
+**Changed 2026-09-15:** the runtime spec now publishes real `properties` for every
+`200` response. That does *not* flip the decision — the models stay hand-written
+(the docs mirror is still example-only, the schemas encode SDK-specific choices like
+`blitzList`'s `null`→`[]` coercion and the superset-model strategy, and generated
+output would churn on every upstream tweak). It does make verification far cheaper:
+a sync can now diff the hand-written shape against real schema field lists instead
+of eyeballing examples. `z.looseObject` remains the safety net so additions don't
+break deserialization between SDK releases.
 
 ---
 
@@ -110,8 +139,8 @@ deserialization between SDK releases.
   response includes top-level `company_linkedin_url`, `max_results`, and
   `results_length` (its old spec example was `null`, so the Python model omits
   them). The TS `WaterfallIcpResponse` includes them.
-- **Pagination**: `search.people`/`companies`, `jobs.search`/`company`, and
-  `company.tam_by_jobs` (cursor) and
+- **Pagination**: `search.people`/`companies`, `jobs.search`/`company`,
+  `company.tam_by_jobs`/`tam_by_people` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` (`src/pagination.ts`),
   Stainless/OpenAI-style but
   snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates the same
@@ -129,13 +158,13 @@ deserialization between SDK releases.
   given) so a stuck stream aborts instead of looping forever; offset stops at
   `page >= total_pages`. `waterfall_icp` is not paginated. The cursor/offset wiring
   lives in two factories (`make_cursor_page_promise`/`make_offset_page_promise`) so
-  all four cursor methods share one path and the guard lives in one place.
+  all six cursor methods share one path and the guard lives in one place.
   - **`max_results` is page size, not a total** (the API bills 1 record per result
-    returned), so `for await` streams every match up to the server limit. The six
+    returned), so `for await` streams every match up to the server limit. The seven
     paginated methods therefore accept a client-side **`max_items`** total cap that
     bounds `for await`/`collect()` and stops fetching once reached. `max_items` is
-    destructured off in the resource method and **never sent on the wire** (it's not
-    an API field). It caps the `PagePromise` streaming entry point only — `await` +
+    destructured off in `cursor_page`/`offset_page` (not the resource method, which
+    passes `params` whole) and **never sent on the wire** (it's not an API field). It caps the `PagePromise` streaming entry point only — `await` +
     manual `get_next_page()` stay uncapped. `PagePromise.collect()` drains the
     (capped) stream into an array via a small `take(source, n)` generator.
 
@@ -157,13 +186,25 @@ src/
                   STATUS_ERRORS maps code->class.
   client.ts       BlitzAPI: the fetch retry loop, options ctor, lazy memoized resource getters.
   pagination.ts   Page/CursorPage/OffsetPage/PagePromise: auto-pagination for the
-                  search.* and jobs.* lists.
+                  search.*, jobs.* and company.tam_by_* lists. CursorPage/OffsetPage
+                  read results/cursor/total_pages straight off the response, via the
+                  CursorEnvelope/OffsetEnvelope constraints — no accessor callbacks.
   resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog).
+    paginate.ts   INTERNAL. cursor_page()/offset_page(): the one place a paginated method
+                  builds its request — strips max_items, rewrites the paging key, threads
+                  options into every page fetch. The seven paginated methods are one line each.
   types/
-    models.ts     blitzObject = (shape) => z.looseObject(shape);
+    models.ts     INTERNAL (not re-exported). blitzObject = (shape) => z.looseObject(shape);
                   blitzList(item) = null/undefined-tolerant array field (coerces both to []).
-    shared.ts     Location, Experience, Education, Certification, Person, HQ, Company.
-    enums.ts      GENERATED. Industry(534) + CompanyType/EmployeeRange/Continent/
+    envelopes.ts  INTERNAL (not re-exported). v2_response(shape) appends the shared
+                  fair_usage block; cursor_envelope(item) / search_envelope(item) build
+                  the paginated envelopes; offset_fields(item) is the offset counterpart
+                  (spread, not wrapped — employee-finder prefixes its own field). Every
+                  /v2 model is constructed through these, so fair_usage is structural
+                  rather than a remembered convention.
+    shared.ts     Location, Experience, Education, Certification, Person, HQ, Company,
+                  MeteredValue, FairUsage.
+    enums.ts      GENERATED. Industry(535) + CompanyType/EmployeeRange/Continent/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement. Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
@@ -196,7 +237,7 @@ BlitzError
 ├── APIResponseValidationError                 # 2xx body not JSON / wrong shape; .status_code, .request_id, .cause
 └── APIStatusError                             # non-2xx; .status_code, .body, .message, .request_id
     ├── AuthenticationError  # 401
-    ├── FairUsageLimitError  # 402
+    ├── InsufficientRecordsError  # 402
     ├── NotFoundError        # 404
     ├── RateLimitError       # 429 (only after retries exhausted)
     └── ServerError          # 5xx (only after retries exhausted)
@@ -205,30 +246,65 @@ BlitzError
 Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
 `error.name` is set per class via `new.target.name`.
 
-`InsufficientCreditsError` is a **deprecated alias** of `FairUsageLimitError`, bound to
-the same class object. Deliberately *not* a subclass: the client throws
-`FairUsageLimitError`, so a subclass would make `instanceof InsufficientCreditsError`
-false and break the very callers the alias exists for.
+The 402 class is **`InsufficientRecordsError`**, matching `blitz-api-py`. Two aliases
+have pointed at it over time, both bound to the same class object rather than subclassed
+— a subclass would make `instanceof <alias>` false for the error the client actually
+throws, breaking exactly the callers an alias exists for:
+
+| alias | status |
+| --- | --- |
+| `InsufficientCreditsError` | **removed 2026-09-22** (3.0.0), one major later than scheduled. A test pins its absence from the export surface. |
+| `FairUsageLimitError` | **deprecated 2026-09-22** (3.0.0), the 2.0.0-era name. Scheduled for removal in 4.0.0. |
+
+Note `error.name` comes from `new.target.name`, so it is `"InsufficientRecordsError"`
+from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, not in
+4.0.0 — the alias only covers `instanceof` and imports.
 
 ---
 
 ## 7. Data-model specifics & quirks
 
-- **`Industry` has 534 values** including upstream oddities: near-duplicates
+- **`Industry` has 535 values** including upstream oddities: near-duplicates
   (`"Airlines and Aviation"` vs `"Airlines/Aviation"`) and one double-escaped value,
   `"Women\\'s Handbag Manufacturing"` (two literal backslashes + apostrophe). Kept
   byte-for-byte. The generator emits each value via `JSON.stringify` so escaping
-  round-trips exactly.
+  round-trips exactly. The 535th, **`"Unknown"`** (added 2026-09-16), is a *sentinel*
+  rather than an industry — it matches companies with no industry value, and upstream
+  appends it after the alphabetical run, which the generator preserves (it mirrors spec
+  order, it does not sort).
 - **`Company.linkedin_id` is a number**; `Person`/`Experience` linkedin ids are strings.
+- **`Company` carries no `slogan`/`revenue`/`employee_growth`.** They were added in the
+  2026-09-15 sync and removed again on 2026-09-22: neither spec documents them on any
+  response (`revenue` exists only as a *request-side* range filter) and no changelog entry
+  announces them, so they would have read `undefined` forever. `blitzObject` preserves them
+  as unknown keys if the API ever does send them. Rule: a response field goes on a model
+  only if the runtime spec's response `properties` or a docs-mirror example shows it —
+  a hand-written test fixture is not evidence, it just confirms itself.
 - **`Location`** is reused for `Person.location`, `Experience.job_location`, and
-  `Job.location`. The jobs payload populates only `city`/`country_code`; because every
-  field is `.nullish()` on a `blitzObject`, the superset parses it unchanged rather than
-  needing a narrower per-endpoint duplicate.
+  `Job.location`. Only `Person.location` carries `postal_code`/`street_address`; the jobs
+  payload populates only `city`/`country_code`. Because every field is `.nullish()` on a
+  `blitzObject`, the superset parses all three unchanged rather than needing narrower
+  per-endpoint duplicates.
+- **`Education` has no `field_of_study`.** The API removed it on 2026-09-15 and folded the
+  field of study into `degree` (`"Bachelor of Science, Industrial Engineering"`). Guarded by
+  a schema-shape assertion in `models.test.ts` — `blitzObject` would otherwise happily
+  preserve a stray raw key and let the removal go unnoticed.
+- **`Person.profile_picture_url` is always `null`** since 2026-09-15. The API still returns
+  the key, so the field stays on the model (marked `@deprecated`) rather than being dropped.
+- **`Person.headline` is derived**, not the free-text LinkedIn headline: it is built from the
+  first position as `<job title> | @<employer>`.
+- **`Experience.job_contract_type`/`job_work_arrangement` stay loose strings**, not the
+  request-side `EmploymentType`/`WorkArrangement` enums — those enums exist only on the
+  request side of the *jobs* endpoints, and the person payload's values are free-form.
 - **`Job.date_posted` stays a string.** The API emits a non-ISO-8601 timestamp
   (`"2026-07-08 23:00:07+02"` — space separator, offset, no `T`), so it is never
   coerced to a `Date`.
-- **`HQ.postcode`/`street`** are only returned by company enrichment; **`Experience.company_name`**
-  only by people search. All optional on one superset model.
+- **`HQ.postcode`/`street` are no longer in the spec** — as of the 2026-09-15 sync they
+  appear on no endpoint and in no example (upstream never announced this). Kept as optional
+  fields anyway: they cost nothing when absent, and removing them would break callers over an
+  unannounced change. Expect `undefined`. **`Experience.company_name`** is now populated on
+  every person-returning endpoint (it used to be people-search-only) and prefers the name on
+  the linked LinkedIn company page.
 - **List fields use `blitzList(item)`** (`src/types/models.ts`), which coerces a
   missing **or `null`** value to `[]`. Plain `z.array(x).default([])` only fills the
   default for `undefined`, so an explicit `null` would throw a `ZodError` and break
@@ -239,8 +315,11 @@ false and break the very callers the alias exists for.
   (`number | "unlimited"`) is shared by `FairUsage.records_remaining`,
   `KeyInfo.records_remaining`, and `KeyInfo.max_requests_per_seconds`. The public
   `/changelog/` (a top-level array) is the one endpoint without the block.
-- **`specialties`** is the one list kept `.nullish()` (nullable, surfaces `null`
-  rather than `[]`) because the API documents it as genuinely nullable.
+- **Every `array | null` list coerces to `[]`** through `blitzList`, with no
+  exceptions — `experiences`, `skills`, `education`, `certifications` and
+  `specialties`. `specialties` was the lone holdout until 2026-09-22 (see the
+  decision log); the runtime spec types it exactly as it types `skills`, so the
+  exemption was never a spec fact.
 
 ---
 
@@ -266,18 +345,277 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 - Rate limiting is **per endpoint**: the client holds one token bucket per endpoint path
   (lazy `Map` in `client.ts`), each sized at `rate_limit_rps` (5 by default), so a burst on
   one endpoint (e.g. `enrichment.email`) never throttles another (e.g. `enrichment.phone`).
-  This mirrors the API, whose server-side limit is itself **per endpoint** (5 rps on each
+  This mirrors the API, whose server-side limit is itself **per endpoint** (10 rps on each
   endpoint independently, per the docs), so a single client instance stays under the limit on
   every endpoint. The 429 retry path remains the backstop for bursts across processes (each
   process has its own buckets). `blitz-api-py` is also per endpoint (sliding window there vs.
   token bucket here), so the "mirror 1:1" parity holds.
-- Rate limiter does not auto-detect your per-endpoint limit from `key_info` (uses 5 rps).
-- Response models are validated against the spec's *examples*, not a formal response
-  schema (the API doesn't publish one); `z.looseObject` is the safety net.
+- Rate limiter does not auto-detect your per-endpoint limit from `key_info` (uses 5 rps,
+  half the API's 10 — so the default leaves throughput on the table by design).
+- Request-side **list caps are not enforced client-side**: the API rejects any filter list
+  over 50 entries (and a `cascade` over 10 steps) with a `422`. The SDK documents the caps
+  on the filter interfaces but does not validate, so an over-long list surfaces as a server
+  error rather than a type error.
+- `z.looseObject` remains the safety net for response drift, now backed by real response
+  `properties` in the runtime spec (see §3) rather than examples alone.
 
 ---
 
 ## 10. Decision log
+
+- **2026-09-22** — **`experiences[]` on `search.people` carries the matched position
+  only — treat it as a single entry.** Resolved by the API owner after #27 challenged it;
+  recorded here because the published sources still disagree and will mislead the next
+  reader who checks them.
+
+  What the three sources say, as of today:
+  - `GET /changelog/`, 2026-09-21: "`experiences[]` on `/v2/search/people` now carries the
+    single position that matched your search." **Correct.**
+  - `docs.blitz-api.ai/api-reference/people-search/find-people`: "Every result carries the
+    person's full position history in `experiences[]`, in profile order, **not just the
+    position that matched your filters**." **Stale** — it describes pre-2026-09-21
+    behaviour and explicitly negates the changelog's phrasing, so it reads as a live
+    contradiction rather than a lag. Its two-positions-per-person response examples are
+    stale for the same reason, and are *not* independent corroboration of its prose.
+  - The runtime spec carries no `description` on the field, so it breaks no tie.
+
+  #27 read the docs page as authoritative on the grounds that being the later statement
+  does not beat being explicitly denied by the reference — reasonable from the published
+  record alone, and the example payloads made it look stronger still. It was wrong anyway:
+  the reference and its examples are both stale. **Lesson for the next sync: when the
+  changelog and the reference page conflict, neither the docs prose nor its examples settle
+  it — ask the API owner.** A docs example is evidence that a field *exists* (per the rule
+  in §7); it is not evidence of cardinality, because examples are not regenerated on a
+  behaviour change.
+
+  The API owner's phrasing is "only the matched experience in most cases", so the SDK says
+  the matched position and tells callers to write for one entry, rather than promising
+  exactly one. `enrichment.person` stays the documented route to a whole career and is the
+  actionable part either way. Docs-only — the field is `blitzList(Experience)` under any
+  reading, so nothing in the schema moves. **Still outstanding upstream:** the reference
+  page and its examples need correcting, and `blitz-api-py` carries the same hedge this
+  entry just removed (its issue #30 / PR #24), so the two SDKs are divergent again until it
+  is updated.
+
+- **2026-09-22** — Cleared the three cross-SDK divergences `blitz-api-py` raised against
+  PR #23 (issues #24, #25, #26), all folded into the same breaking release rather than
+  deferred, since each is cheaper to take while callers are already re-reading their
+  imports. **(1) `Company.specialties` now uses `blitzList`** (#24). It was the one
+  `array | null` list still surfacing `null`, justified in the 2026-06-01 entry as "the
+  API documents it as genuinely nullable" — which the runtime spec does not support:
+  `specialties` is `anyOf[anyOf[array, null], null]` and `skills` is
+  `anyOf[array, null]`, the same `array | null` either side of a redundant wrapper that
+  is a schema-generation artefact, not a semantic distinction. Keeping it meant
+  `company.specialties?.map()` needed a guard that `person.skills.map()` did not, which
+  is the exact ad-hoc-guard problem `blitzList` exists to delete — and it made the two
+  SDKs return different values for identical wire bytes. Type-level breaking
+  (`string[] | null | undefined` → `string[]`), but only by removing a `null` callers
+  had to handle. The rule in `CLAUDE.md` lost its "genuinely nullable" exemption
+  clause with it: there is now no exempt list.
+  **(2) Removed the `InsufficientCreditsError` alias** (#25, gap 1). Deprecated in
+  2.0.0 "to be removed in a future major"; this is that major, and it survived one
+  already. The compat test flipped to pinning the name's *absence* from the export
+  surface, mirroring `test_insufficient_credits_alias_is_gone` on the Python side.
+  **(3) `OffsetPage.has_next_page()` also requires a non-empty page** (#26). On
+  `{ page: 2, total_pages: 9, results: [] }` the walk stopped costing seven round trips
+  that return nothing — a stale or over-counted `total_pages` is plausible on an offset
+  endpoint whose underlying set can shrink mid-walk. Non-breaking (it only ever stops
+  earlier). Deliberately **not** mirrored onto `CursorPage`, which keeps paging through
+  an empty page while the cursor is live: there a sparse intermediate page can precede a
+  full one, so the same guard would truncate a valid walk. The asymmetry is now a comment
+  on both classes so the next reader doesn't "fix" it into symmetry.
+  **(4) Settled #25's gap 2, the 402 class name:** `FairUsageLimitError` →
+  **`InsufficientRecordsError`**, matching `blitz-api-py`. Owner's call; JS moves, so JS
+  takes the breakage. It was the single error name of the ten that differed across the two
+  SDKs, and the one a user meets when they run out of records, so the divergence was
+  concentrated in the worst place. The winning name describes the resource that ran out
+  rather than the policy that rejected the call, which is also the vocabulary the rest of
+  the API already uses (`records_used`, `records_remaining`, `fair_usage.records_remaining`).
+
+  `FairUsageLimitError` ships as a deprecated alias bound to the same class object, on the
+  2.0.0 precedent, scheduled for 4.0.0. Adding an alias in the same release that deletes
+  `InsufficientCreditsError` is not a contradiction: that one had outlived its schedule by
+  a major, this one starts its clock now. The alias covers `instanceof` and imports but
+  **not** `error.name`, which comes from `new.target.name` and reads
+  `"InsufficientRecordsError"` immediately — so string comparisons break in 3.0.0 rather
+  than 4.0.0, and the README and the `@deprecated` tag both say so, since a silent break
+  is the whole failure mode an alias exists to prevent.
+
+- **2026-09-22** — Changelog re-pull before merging the sync branch, per the "start any sync
+  at `GET /changelog/`" rule — which the 2026-09-15 pass had not re-run, so it missed two
+  upstream entries and shipped three fields that were never there.
+  **(1) Removed `Company.slogan`, `Company.revenue`, `Company.employee_growth` and the
+  `EmployeeGrowth` model.** A field-path diff of every response model against the runtime
+  spec found them to be the only SDK-side fields with no counterpart anywhere: the runtime
+  spec has no `slogan`/`employee_growth` at all and carries `revenue` only as a
+  *request-side* range filter (`company.revenue.min`/`max`), the docs mirror's company
+  examples omit all three, and no changelog entry announces them. Typed, they would read
+  `undefined` on every response while promising a value; the parse test could not catch it
+  because the fixture in `test/data.ts` supplied the values it then asserted. Removed rather
+  than kept: unlike `HQ.postcode`/`street` — which the spec *used* to document, so dropping
+  them would break callers over an unannounced change — these were never documented, so
+  nothing can be relying on them. `blitzObject` still preserves them as unknown keys if the
+  API turns out to send them. Note this is **not** a breaking change against the released
+  `2.0.0`: all three fields (and `EmployeeGrowth`) were added and removed inside this same
+  unreleased branch, so no published version ever carried them — they need no
+  `BREAKING CHANGE:` footer, and listing them as one would tell users to fix code that
+  never compiled against a real release. **(2) `experiences[]` on `search.people` is back to the
+  matched position only** (upstream 2026-09-21), reversing part of the 2026-09-15 change;
+  `enrichment.person` still returns the whole career, which is now the reason to reach for
+  it. No schema change — the field is the same `blitzList(Experience)` either way. See the
+  2026-09-22 entry on #27 above for why this survived a challenge.
+  **(3) `Unknown` widened** (upstream 2026-09-17): on the people- and job-side endpoints
+  `company.industry.include` now also matches records with **no company attached**, not just
+  companies with no industry value; `exclude` drops both. `search.companies` keeps the
+  narrower meaning. `IndustryFilter` is shared by all of them, so its doc comment now splits
+  the two readings instead of documenting only the `search.companies` one.
+  **Verified unchanged:** every other response model matches the runtime spec field-for-field
+  (the only remaining SDK-side extras are the deliberate `Location`/`HQ` superset fields), the
+  request filters match the spec's request `properties` exactly, and the `cascade: 10` /
+  50-entry caps, `profile_min_connections: 0` default, `422` body shape and search-side `503`
+  are all still as documented.
+
+- **2026-09-22** — Second code-quality audit, finishing what the 2026-09-16 pass started.
+  All behaviour-preserving; no wire change. **(1)** The accessor layer the previous entry
+  claimed to delete was only *half* deleted: the six call sites stopped passing
+  `get_items`/`get_cursor`/`get_total_pages`, but `CursorPage`/`OffsetPage` still carried
+  them as private fields and constructor params, now fed by two hardcoded lambda triples
+  inside the factories. Pushing the `CursorEnvelope`/`OffsetEnvelope` constraint down onto
+  the classes lets them read `response.results`/`.cursor`/`.total_pages` directly, so all
+  six fields and six params are gone (`pagination.ts` 288 → 266). The duplicated
+  "is the cursor usable" predicate in `has_next_page`/`get_next_page` collapsed into one
+  `#next_cursor()`. **This is a public-surface break, and the only one in the audit that
+  reaches a released API:** `CursorPage`/`OffsetPage` are re-exported from `index.ts`, so
+  their constructors go 5 args → 3 and `TResponse` gains a
+  `CursorEnvelope`/`OffsetEnvelope` constraint — anyone who constructed a page by hand, or
+  named the type over a `TResponse` without `results`, has to change. Counted as acceptable
+  rather than papered over with a compatible overload: the discarded 5-arg form also
+  required a `fetch_page` closure that only `make_*_page_promise` can build, so the
+  constructor is reachable but not usefully callable from outside, and an overload would
+  resurrect the exact accessor layer this entry deletes. It ships in a release that is
+  already breaking, with a `BREAKING CHANGE:` footer rather than a silent signature change.
+  (Raised in review on PR #23; recorded here rather than reverted.) **(2)** New internal
+  `resources/paginate.ts` with
+  `cursor_page()`/`offset_page()`. The seven paginated methods each re-implemented the same
+  three obligations — strip `max_items`, rewrite the paging key, thread `options` into
+  *every* page fetch — which is the same remembered-convention problem `v2_response` solved
+  for `fair_usage`; each method body is now one line. **(3)** `offset_fields(item)` in
+  `envelopes.ts`, the counterpart to `cursor_fields`, spread into `EmployeeFinderResponse`
+  (verified parsed key order still matches the wire exactly). Not wrapped in an envelope
+  factory: the sole offset endpoint prefixes `company_linkedin_url`, and the offset wire
+  order genuinely differs from the cursor one (`results` last, `max_results` before
+  `results_length`) — one parameterised shape would be magic hiding that.
+  **(4) Breaking (request):** `CompanyFilter.linkedin_url` moved to a new
+  `PeopleCompanyFilter extends CompanyFilter`, used by `PeopleSearchParams` and
+  `TamByPeopleParams`. `search.companies` accepts-then-silently-ignores the field — the
+  identical failure mode that got `PeopleFilter.linkedin_url` removed one week earlier, so
+  it gets the identical treatment rather than staying a documented superset field. Sending
+  it to `search.companies` is now a compile error; the two people-side endpoints are
+  unaffected. **(5)** The `fair_usage` sweep in `test/models.test.ts` was matching on
+  `name.endsWith("Response")`, which silently skipped any endpoint model named otherwise —
+  `KeyInfo` is proof those exist. Confirmed the hole by exporting a `/v2` model with no
+  `fair_usage` named `BalanceSnapshot`: all 139 tests passed. Inverted to an explicit
+  `SUB_MODELS` exemption list (every exported `ZodObject` must be a known nested model or
+  carry `fair_usage`), which fails on that probe, and dropped the hand-maintained count of
+  20 that the sweep was supposed to have replaced. A second assertion keeps the exemption
+  list itself honest by checking each name still resolves to a real export.
+
+- **2026-09-16** — Deduplicated the response/pagination layer after a code-quality audit
+  found the "add an endpoint" checklist had become duplicated state that grew with every
+  release (the `(r) => r.results` closure went 3 → 5 → 6 → 7 across feature commits, and
+  the 9-line `max_results`/`cursor`/`max_items` params tail was byte-identical 7 times).
+  Four layers, all behaviour-preserving: **(1)** new internal `types/envelopes.ts` with
+  `v2_response(shape)`, which appends the shared `fair_usage` block — 19 copies of the
+  same doc comment and 20 hand-written field declarations gone, and the block is now
+  impossible to omit. **(2)** `cursor_envelope(item)` / `search_envelope(item)` build the
+  six paginated envelopes (the latter adds `total_results`; the `tam_by_*` pair omits it,
+  as the API does). Spread rather than `.extend()`ed so each envelope keeps the API's own
+  field order — verified the parsed key order still matches the wire exactly. **(3)**
+  `make_cursor_page_promise`/`make_offset_page_promise` now constrain `TResponse` to a
+  `CursorEnvelope`/`OffsetEnvelope`, which the factories guarantee by construction, so all
+  seven call sites drop both accessor closures and their (always inferable) explicit
+  generic arguments — a paginated resource method fell from 8 body lines to 3, leaving
+  only the per-endpoint path and schema. **(4)** `CursorPaginatedParams` /
+  `OffsetPaginatedParams` base interfaces replace the seven repeated tails. Net **−132
+  lines**. The `fair_usage` test stopped being a hand-maintained list of 20 names (which
+  only checked models someone remembered to add) and became a sweep of the export surface;
+  confirmed it bites by temporarily regressing one model off the factory. **Surface
+  impact:** the emitted `.d.ts` is unchanged apart from doc comments, a cosmetic
+  type-level reordering of `total_results`, the `extends` clauses themselves, and **two
+  new exports** — `CursorPaginatedParams`/`OffsetPaginatedParams`, additive and now part
+  of the public request vocabulary. `envelopes.ts` is internal, like `models.ts`.
+  **Deliberately not done** (considered and rejected): merging `Location`/`HQ` (different
+  wire keys); unifying `country_code`'s `string[]` vs `KeywordFilter` split (the API
+  genuinely differs per endpoint — faithful mirroring); a `found_envelope(key, model)`
+  factory (the payload key varies, so it would be magic hiding a simple shape); merging
+  `CursorPage`/`OffsetPage` (genuinely different `has_next_page` logic, 687 lines of tests
+  riding on them); collapsing the seven `{include, exclude}` filter interfaces (they are
+  the public surface, and `Enum | (string & {})` already makes them mutually assignable —
+  the safety is autocomplete-only by design).
+
+- **2026-09-16** — Follow-up spec re-pull, one day after the 2026-09-15 sync. Upstream
+  published two changelog entries; the spec delta is tiny and entirely additive.
+  **(1)** `Industry` gained a 535th value, **`"Unknown"`** — a sentinel matching companies
+  with *no* industry, usable in `include` (adds them to your list) or `exclude` (drops
+  them). Before it, reaching those companies meant enumerating every other industry in
+  `exclude`, which the 50-entry cap made impossible. Picked up by `pnpm gen:enums:fetch`
+  with zero hand-editing; the generator's divergence check passed, confirming upstream
+  added it consistently to all inlined copies. Note it lands **after** the alphabetical
+  run (upstream appends), which the generator preserves — it mirrors spec order and does
+  not sort. **(2)** Range filters now reject `min > max` with a `422` naming the field.
+  Previously accepted and silently wrong: `company.revenue` 500'd, every other range
+  returned no results. Pure server-side validation, no schema change — documented on
+  `RangeFilter` (along with `max: 0` meaning *no upper bound*) because the failure mode
+  moved from "empty page" to "thrown `APIStatusError`", which callers may need to handle.
+  **(3)** The only other spec diff is `company.industry.include`/`exclude` losing their
+  `default: []` — inert here, since the SDK never encodes request defaults (`to_jsonable`
+  just drops `undefined`). No endpoints, fields, or constraints changed otherwise;
+  verified by a field-and-constraint diff across both spec pulls. Stale `534` counts
+  corrected in README/§5/§7.
+
+- **2026-09-15** — Synced against the live spec + docs after the batch of upstream changes
+  published on `GET /changelog/` that day. **(1) Two new endpoints.**
+  `enrichment.person()` (`POST /v2/enrichment/person`, 1 record on success, free on a miss)
+  returns `PersonEnrichmentResponse` = `{found, person, fair_usage}` — the same envelope as
+  the reverse lookups, reusing the shared `Person`; named for the spec path, matching the
+  `CompanyEnrichmentResponse`/`/v2/enrichment/company` precedent.
+  `company.tam_by_people()` (`POST /v2/company/tam-by-people`, cursor-paginated, 1 record
+  per result) returns `{company, matched_people}` matches — the people-side twin of
+  `tam_by_jobs` (that one sizes accounts on who they're *hiring*, this one on who already
+  works there) — and rides the existing `make_cursor_page_promise`, so it inherits the
+  null-cursor stop and non-advancing-cursor guard for free.
+  **(2) Breaking (response):** `Education.field_of_study` is **removed** — the API folded
+  the field of study into `degree` (`"Bachelor of Science, Industrial Engineering"`).
+  Guarded by the existing `Education` schema-shape assertion, which is exactly why that
+  assertion exists: `blitzObject` would otherwise preserve a stray key and hide the change.
+  **(3) Breaking (request):** `PeopleFilter.linkedin_url` **removed**. `/v2/search/people`
+  stopped honouring it on 2026-09-11 — a request that still sends it *succeeds* but silently
+  returns results for the other criteria, the worst possible failure mode — so the SDK turns
+  it into a compile error. The filter survives on `company.tam_by_people`, so it moved to a
+  new `TamPeopleFilter extends PeopleFilter` (which also carries `min_per_company`),
+  mirroring the `TamJobFilter extends JobFilter` split rather than widening the shared
+  filter. `CompanyFilter.linkedin_url` is untouched (still honoured on `search.people` and
+  now `tam_by_people`; still ignored by `search.companies`).
+  **(4) New response fields**, all additive on the superset models: `Location.postal_code` /
+  `street_address` (person locations only), `Experience.job_contract_type` /
+  `job_work_arrangement` (loose strings — free-form upstream, deliberately *not* pinned to
+  the request-side `EmploymentType`/`WorkArrangement` enums). *(This entry also added
+  `Company.slogan`/`revenue`/`employee_growth`; reverted 2026-09-22 — see the entry above,
+  they are in neither spec.)* **(5) Semantics-only, documented not enforced:** `headline` is now
+  derived as `<job title> | @<employer>`; `profile_picture_url` is always `null` (kept on
+  the model, marked `@deprecated`, since the API still returns the key);
+  `search.people`/`enrichment.person` return the *whole* career in `experiences[]`
+  (*narrowed to the matched position for `search.people` on 2026-09-21 — see above*); every
+  filter list is capped at 50 entries and `cascade` at 10 steps (documented on the filter
+  interfaces, **not** validated client-side — see §9); `waterfall_icp`'s
+  `profile_min_connections` server default is `0`, not 200. **(6)** API rate limit is now
+  **10 req/s per endpoint** (50 on legacy plans); `DEFAULT_RATE_LIMIT_RPS` stays **5** —
+  the published docs describe the SDK default as deliberately half the cap — so only the
+  prose in `constants.ts`/README/§2/§9 changed. **(7)** `records_remaining: "unlimited"`
+  needed no code change: `MeteredValue` already modelled it. Enums regenerated from the
+  live spec: **zero drift**. Also rewrote §3 — the runtime spec now publishes real response
+  `properties`, so a sync can diff against schemas instead of examples; the models stay
+  hand-written (reasons in §3). Not yet mirrored in `blitz-api-py`.
 
 - **2026-09-02** — Purged "credits" from the SDK's vocabulary; the API no longer uses the
   word (the live spec has **zero** occurrences — endpoints document `Cost: 1 record per
@@ -427,7 +765,8 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   fills `undefined`, so an explicit `null` from the API threw a `ZodError` (escaping
   the `BlitzError` hierarchy and breaking the forward-compat guarantee). `blitzList`
   coerces `null` and `undefined` to `[]`; `Company.specialties` stays `.nullish()` by
-  design. Added a regression parse test for `null` lists (top-level + nested).
+  design *(reversed 2026-09-22 — the spec does not support the exemption)*. Added a
+  regression parse test for `null` lists (top-level + nested).
 - **2026-06-01** — Initial TS SDK, ported from `blitz-api-py`. Zod v4 (responses) +
   TS interfaces (requests); async-only; snake_case everywhere (user decision, for
   1:1 docs/Python parity); release-please + npm OIDC; hand-written response models;

@@ -4,7 +4,9 @@ import type { BlitzAPI } from "../client.js";
 import { ChangelogResponse } from "../types/changelog.js";
 import type { ChangelogParams, RequestOptions } from "../types/filters.js";
 
-// Public endpoint: no `/v2` prefix, and the trailing slash is load-bearing.
+// Public endpoint: no `/v2` prefix. The trailing slash is what the spec declares;
+// the API also answers `/changelog` (verified 2026-09-15 — both return 200, no
+// redirect), so it is not load-bearing, but keep it to match the spec.
 const CHANGELOG = "/changelog/";
 
 export class ChangelogResource {

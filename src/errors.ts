@@ -7,7 +7,7 @@
  *   ├── APIResponseValidationError  // a 2xx body was not valid JSON / not the expected shape
  *   └── APIStatusError              // a non-2xx HTTP response was received
  *       ├── AuthenticationError  // 401
- *       ├── FairUsageLimitError  // 402
+ *       ├── InsufficientRecordsError  // 402
  *       ├── NotFoundError        // 404
  *       ├── RateLimitError       // 429 (after retries are exhausted)
  *       └── ServerError          // 5xx (after retries are exhausted)
@@ -103,18 +103,24 @@ export class APIStatusError extends BlitzError {
 /** 401 — the API key is missing or invalid. */
 export class AuthenticationError extends APIStatusError {}
 
-/** 402 — the key is valid but the plan's Fair Use record limit is reached. */
-export class FairUsageLimitError extends APIStatusError {}
+/**
+ * 402 — the key is valid but the plan's Fair Use record limit is reached.
+ *
+ * Named for the resource that ran out, matching `blitz-api-py` and the `records_used` /
+ * `records_remaining` vocabulary the rest of the API already uses.
+ */
+export class InsufficientRecordsError extends APIStatusError {}
 
 /**
- * @deprecated Renamed to {@link FairUsageLimitError} — the API's `402` is a Fair Use
- * record-limit response, and "credits" is no longer Blitz vocabulary. This is an alias
- * for the same class (not a subclass), so existing `instanceof` checks keep working
- * unchanged. It will be removed in a future major.
+ * @deprecated Renamed to {@link InsufficientRecordsError} in 3.0.0, to settle the one
+ * error name that differed between this SDK and `blitz-api-py`. An alias for the same
+ * class (not a subclass), so `instanceof` keeps working unchanged. Scheduled for removal
+ * in 4.0.0 — note `error.name` is already `"InsufficientRecordsError"`, so a check
+ * against the string `"FairUsageLimitError"` is broken now, not in 4.0.0.
  */
-export const InsufficientCreditsError = FairUsageLimitError;
-/** @deprecated Renamed to {@link FairUsageLimitError}. */
-export type InsufficientCreditsError = FairUsageLimitError;
+export const FairUsageLimitError = InsufficientRecordsError;
+/** @deprecated Renamed to {@link InsufficientRecordsError}. */
+export type FairUsageLimitError = InsufficientRecordsError;
 
 /** 404 — the API key or resource does not exist. */
 export class NotFoundError extends APIStatusError {}

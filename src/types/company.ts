@@ -1,8 +1,9 @@
 /** Response models for the Company resource (TAM builders). */
 
 import * as z from "zod";
-import { blitzList, blitzObject } from "./models.js";
-import { Company, FairUsage } from "./shared.js";
+import { cursor_envelope } from "./envelopes.js";
+import { blitzObject } from "./models.js";
+import { Company } from "./shared.js";
 
 /**
  * One `company.tam_by_jobs` match: a company plus how many of its live job
@@ -21,12 +22,26 @@ export type TamByJobsMatch = z.infer<typeof TamByJobsMatch>;
  * envelopes this one carries **no `total_results`** (the spec omits it); iterate
  * until `cursor` is `null`. `results` is a list of {@link TamByJobsMatch}.
  */
-export const TamByJobsResponse = blitzObject({
-  results: blitzList(TamByJobsMatch),
-  results_length: z.number().nullish(),
-  max_results: z.number().nullish(),
-  cursor: z.string().nullish(),
-  /** Record usage, rate limit, and tracing data for this request. */
-  fair_usage: FairUsage.nullish(),
-});
+export const TamByJobsResponse = cursor_envelope(TamByJobsMatch);
 export type TamByJobsResponse = z.infer<typeof TamByJobsResponse>;
+
+/**
+ * One `company.tam_by_people` match: a company plus how many of its current
+ * employees matched the filters. `matched_people` is the count on this company
+ * (it respects the request's `people.min_per_company` floor). `company` reuses
+ * the shared {@link Company} model.
+ */
+export const TamByPeopleMatch = blitzObject({
+  company: Company.nullish(),
+  matched_people: z.number().nullish(),
+});
+export type TamByPeopleMatch = z.infer<typeof TamByPeopleMatch>;
+
+/**
+ * Cursor-paginated result of `company.tam_by_people`. Like
+ * {@link TamByJobsResponse} it carries **no `total_results`** (the spec omits
+ * it); iterate until `cursor` is `null`. `results` is a list of
+ * {@link TamByPeopleMatch}.
+ */
+export const TamByPeopleResponse = cursor_envelope(TamByPeopleMatch);
+export type TamByPeopleResponse = z.infer<typeof TamByPeopleResponse>;
