@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.0.0](https://github.com/api-blitz/blitz-api-js/compare/v2.0.0...v3.0.0) (2026-09-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* the 402 class is renamed `FairUsageLimitError` -> `InsufficientRecordsError`, matching `blitz-api-py`. `FairUsageLimitError` remains as a deprecated alias for the same class until 4.0.0, so `instanceof` and imports keep working. `error.name` is `"InsufficientRecordsError"` from this release on, so update any comparison against the literal string `"FairUsageLimitError"`.
+* `Company.specialties` is now `string[]`, never `null`. A `null` from the API coerces to `[]` like every other list field, so `specialties?.map()` guards are no longer needed (and `?? []` fallbacks become dead code).
+* drop three response fields neither spec documents; finish the pagination audit
+* `Education.field_of_study` is removed — the API folded the field of study into `degree` ("Bachelor of Science, Industrial Engineering").
+
+### Features
+
+* add the "Unknown" industry sentinel, document the min&gt;max range rejection ([82daa0e](https://github.com/api-blitz/blitz-api-js/commit/82daa0ef9133a38f0a1aa21236b056e608544e8d))
+* close the three cross-SDK divergences raised against this PR ([#24](https://github.com/api-blitz/blitz-api-js/issues/24), [#25](https://github.com/api-blitz/blitz-api-js/issues/25), [#26](https://github.com/api-blitz/blitz-api-js/issues/26)) ([58ff3fd](https://github.com/api-blitz/blitz-api-js/commit/58ff3fd9726e227d1575c20340e9e3a4ecf58209))
+* rename the 402 class to InsufficientRecordsError, matching blitz-api-py ([#25](https://github.com/api-blitz/blitz-api-js/issues/25)) ([42cdf8e](https://github.com/api-blitz/blitz-api-js/commit/42cdf8e5ecde9dd3600ad1667d1f7ea1641691f9))
+* sync with the live spec — person enrichment, TAM by people, 2026-09-15 field changes ([071a8a5](https://github.com/api-blitz/blitz-api-js/commit/071a8a539d01669b671394db5d63df4cd875bb27))
+
+
+### Bug Fixes
+
+* drop three response fields neither spec documents; finish the pagination audit ([14d0444](https://github.com/api-blitz/blitz-api-js/commit/14d0444483be4c78fc9ae6f8c39c2f997aa47768))
+
 ## [2.0.0](https://github.com/api-blitz/blitz-api-js/compare/v1.2.0...v2.0.0) (2026-09-02)
 
 
