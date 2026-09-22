@@ -129,9 +129,20 @@ export class OffsetPage<TItem, TResponse extends OffsetEnvelope<TItem>> extends 
     this.#fetch_page = fetch_page;
   }
 
+  /**
+   * An empty page ends the walk even with pages left on the counter. An offset walk
+   * that has run past the real end keeps returning empty pages, so a stale or
+   * over-counted `total_pages` — plausible here, where the underlying set can shrink
+   * mid-walk — would otherwise spend every remaining page fetching nothing.
+   *
+   * Deliberately *not* symmetric with {@link CursorPage}, which keeps paging through
+   * an empty page while the cursor is live: there a sparse intermediate page can be
+   * followed by a full one, so the same guard would truncate a valid walk. Mirrors
+   * `AsyncPageNumberPage.has_next_page` in `blitz-api-py`.
+   */
   has_next_page(): boolean {
     const total = this.response.total_pages;
-    return typeof total === "number" && this.#page < total;
+    return typeof total === "number" && this.#page < total && this.data.length > 0;
   }
 
   async get_next_page(): Promise<OffsetPage<TItem, TResponse>> {

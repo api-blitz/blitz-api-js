@@ -333,11 +333,13 @@ describe("response models", () => {
     expect(person.person?.education).toEqual([]);
     expect(person.person?.certifications).toEqual([]);
 
-    // `specialties`, which the API documents as genuinely nullable, must stay null.
+    // `specialties` coerces like the other four: the runtime spec types it
+    // `array | null` exactly as it types `skills`, so it gets the same treatment
+    // rather than making callers write one extra null guard.
     expect(
       CompanyEnrichmentResponse.parse({ found: true, company: { specialties: null } }).company
         ?.specialties,
-    ).toBeNull();
+    ).toEqual([]);
 
     // An omitted list still defaults to [] (unchanged behavior).
     expect(KeyInfo.parse({ valid: true }).allowed_apis).toEqual([]);

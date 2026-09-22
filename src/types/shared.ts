@@ -138,7 +138,7 @@ export const Company = blitzObject({
   linkedin_id: z.number().nullish(),
   name: z.string().nullish(),
   about: z.string().nullish(),
-  specialties: z.array(z.string()).nullish(),
+  specialties: blitzList(z.string()),
   industry: z.string().nullish(),
   type: z.string().nullish(),
   size: z.string().nullish(),

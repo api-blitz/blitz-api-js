@@ -699,6 +699,32 @@ describe("pagination edge cases", () => {
     expect(calls).toBe(1);
   });
 
+  it("stops on an empty page even with pages left on the counter (offset)", async () => {
+    // A stale/over-counted total_pages must not cost seven round trips returning
+    // nothing. The cursor side deliberately behaves the other way (see CursorPage).
+    const pages: number[] = [];
+    server.use(
+      http.post(`${BASE}/v2/search/employee-finder`, async ({ request }) => {
+        const body = (await request.json()) as { page?: number };
+        const page = body.page ?? 1;
+        pages.push(page);
+        return HttpResponse.json({
+          page,
+          total_pages: 9,
+          results: page === 1 ? [{ first_name: "E1" }] : [],
+        });
+      }),
+    );
+    const names: Array<string | null | undefined> = [];
+    for await (const e of client().search.employee_finder({
+      company_linkedin_url: "https://www.linkedin.com/company/openai",
+    })) {
+      names.push(e.first_name);
+    }
+    expect(names).toEqual(["E1"]);
+    expect(pages).toEqual([1, 2]); // page 2 came back empty; 3..9 were never requested
+  });
+
   it("treats total_pages: 0 as a single page (offset)", async () => {
     let calls = 0;
     server.use(

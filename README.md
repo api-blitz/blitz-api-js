@@ -378,9 +378,9 @@ try {
 }
 ```
 
-`InsufficientCreditsError` is still exported as a **deprecated** alias for
-`FairUsageLimitError`. It is the same class, not a subclass, so existing `instanceof`
-checks keep working; it will be removed in a future major.
+The `InsufficientCreditsError` alias deprecated in 2.0.0 is **removed** in this
+release — catch `FairUsageLimitError` instead. It was always the same class object, so
+the change is a rename at the import site only.
 
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
 `max_retries`; `401`/`402`/`404` throw immediately. A **pre-response** network

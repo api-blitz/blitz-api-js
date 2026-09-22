@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import { to_jsonable } from "../src/base-client.js";
+import * as sdk from "../src/index.js";
 import {
   APIResponseValidationError,
   APIStatusError,
@@ -9,7 +10,6 @@ import {
   BlitzAPI,
   BlitzError,
   FairUsageLimitError,
-  InsufficientCreditsError,
   NotFoundError,
 } from "../src/index.js";
 import { FakeFetch, jsonResponse, textResponse } from "./helpers/clock.js";
@@ -57,15 +57,10 @@ describe("status errors", () => {
     expect(err.request_id).toBe("req_123");
   });
 
-  it("still matches the deprecated InsufficientCreditsError alias", async () => {
-    // The alias must stay the *same class object* — a subclass would silently make
-    // `instanceof InsufficientCreditsError` false for the error the client throws.
-    expect(InsufficientCreditsError).toBe(FairUsageLimitError);
-    const ff = new FakeFetch([jsonResponse({ message: FAIR_USE_MESSAGE }, { status: 402 })]);
-    const error = await client(ff.fetch)
-      .account.key_info()
-      .catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(InsufficientCreditsError);
+  it("no longer exports the removed InsufficientCreditsError alias", () => {
+    // Deprecated in 2.0.0 for the next major, which this is. Pinned as an absence so
+    // the name cannot quietly return; `blitz-api-py` pins the same one.
+    expect(Object.hasOwn(sdk, "InsufficientCreditsError")).toBe(false);
   });
 
   it("falls back to a synthetic message when the body has none", async () => {

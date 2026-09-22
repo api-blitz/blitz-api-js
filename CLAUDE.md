@@ -57,8 +57,9 @@ changes — it records the design decisions so you don't re-derive them.
   failure mode, so make it a compile error.
 - Superset models with optional fields (`.nullish()` scalars, `blitzList(...)` for
   lists — coerces a missing **or `null`** value to `[]`), not per-endpoint duplicates.
-  Numeric fields use `z.number().nullish()`. Use plain `.nullish()` only for a list the
-  API documents as genuinely nullable (e.g. `Company.specialties`).
+  Numeric fields use `z.number().nullish()`. **Every** list field goes through
+  `blitzList` — there is no "genuinely nullable" exemption, because the spec types every
+  `array | null` list the same way and an exempt list just moves a null check onto callers.
 - **Request-side list caps are documented, not enforced.** The API rejects a filter list
   over 50 entries (`cascade`: 10) with a `422`; say so in the interface doc comment and
   let the server enforce it.

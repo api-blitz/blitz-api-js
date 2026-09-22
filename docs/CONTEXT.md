@@ -246,10 +246,12 @@ BlitzError
 Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
 `error.name` is set per class via `new.target.name`.
 
-`InsufficientCreditsError` is a **deprecated alias** of `FairUsageLimitError`, bound to
-the same class object. Deliberately *not* a subclass: the client throws
-`FairUsageLimitError`, so a subclass would make `instanceof InsufficientCreditsError`
-false and break the very callers the alias exists for.
+`InsufficientCreditsError` — the 2.0.0-era deprecated alias of `FairUsageLimitError` —
+was **removed on 2026-09-22**, in the next major after the one it was scheduled for. A
+test pins its absence from the export surface. While it existed it was bound to the same
+class object rather than a subclass, since the client throws `FairUsageLimitError` and a
+subclass would have made `instanceof InsufficientCreditsError` false for exactly the
+callers the alias existed for.
 
 ---
 
@@ -306,8 +308,11 @@ false and break the very callers the alias exists for.
   (`number | "unlimited"`) is shared by `FairUsage.records_remaining`,
   `KeyInfo.records_remaining`, and `KeyInfo.max_requests_per_seconds`. The public
   `/changelog/` (a top-level array) is the one endpoint without the block.
-- **`specialties`** is the one list kept `.nullish()` (nullable, surfaces `null`
-  rather than `[]`) because the API documents it as genuinely nullable.
+- **Every `array | null` list coerces to `[]`** through `blitzList`, with no
+  exceptions — `experiences`, `skills`, `education`, `certifications` and
+  `specialties`. `specialties` was the lone holdout until 2026-09-22 (see the
+  decision log); the runtime spec types it exactly as it types `skills`, so the
+  exemption was never a spec fact.
 
 ---
 
@@ -350,6 +355,38 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-09-22** — Cleared the three cross-SDK divergences `blitz-api-py` raised against
+  PR #23 (issues #24, #25, #26), all folded into the same breaking release rather than
+  deferred, since each is cheaper to take while callers are already re-reading their
+  imports. **(1) `Company.specialties` now uses `blitzList`** (#24). It was the one
+  `array | null` list still surfacing `null`, justified in the 2026-06-01 entry as "the
+  API documents it as genuinely nullable" — which the runtime spec does not support:
+  `specialties` is `anyOf[anyOf[array, null], null]` and `skills` is
+  `anyOf[array, null]`, the same `array | null` either side of a redundant wrapper that
+  is a schema-generation artefact, not a semantic distinction. Keeping it meant
+  `company.specialties?.map()` needed a guard that `person.skills.map()` did not, which
+  is the exact ad-hoc-guard problem `blitzList` exists to delete — and it made the two
+  SDKs return different values for identical wire bytes. Type-level breaking
+  (`string[] | null | undefined` → `string[]`), but only by removing a `null` callers
+  had to handle. The rule in `CLAUDE.md` lost its "genuinely nullable" exemption
+  clause with it: there is now no exempt list.
+  **(2) Removed the `InsufficientCreditsError` alias** (#25, gap 1). Deprecated in
+  2.0.0 "to be removed in a future major"; this is that major, and it survived one
+  already. The compat test flipped to pinning the name's *absence* from the export
+  surface, mirroring `test_insufficient_credits_alias_is_gone` on the Python side.
+  **(3) `OffsetPage.has_next_page()` also requires a non-empty page** (#26). On
+  `{ page: 2, total_pages: 9, results: [] }` the walk stopped costing seven round trips
+  that return nothing — a stale or over-counted `total_pages` is plausible on an offset
+  endpoint whose underlying set can shrink mid-walk. Non-breaking (it only ever stops
+  earlier). Deliberately **not** mirrored onto `CursorPage`, which keeps paging through
+  an empty page while the cursor is live: there a sparse intermediate page can precede a
+  full one, so the same guard would truncate a valid walk. The asymmetry is now a comment
+  on both classes so the next reader doesn't "fix" it into symmetry.
+  **Left open:** #25's gap 2, the 402 class name (`FairUsageLimitError` here,
+  `InsufficientRecordsError` in `blitz-api-py`). It is the single error name that differs
+  across the two SDKs, but picking the winner is a product call and renaming the loser is
+  a breaking change on whichever side moves — not something to decide inside a sync PR.
 
 - **2026-09-22** — Changelog re-pull before merging the sync branch, per the "start any sync
   at `GET /changelog/`" rule — which the 2026-09-15 pass had not re-run, so it missed two
@@ -675,7 +712,8 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   fills `undefined`, so an explicit `null` from the API threw a `ZodError` (escaping
   the `BlitzError` hierarchy and breaking the forward-compat guarantee). `blitzList`
   coerces `null` and `undefined` to `[]`; `Company.specialties` stays `.nullish()` by
-  design. Added a regression parse test for `null` lists (top-level + nested).
+  design *(reversed 2026-09-22 — the spec does not support the exemption)*. Added a
+  regression parse test for `null` lists (top-level + nested).
 - **2026-06-01** — Initial TS SDK, ported from `blitz-api-py`. Zod v4 (responses) +
   TS interfaces (requests); async-only; snake_case everywhere (user decision, for
   1:1 docs/Python parity); release-please + npm OIDC; hand-written response models;

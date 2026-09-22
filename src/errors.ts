@@ -106,16 +106,6 @@ export class AuthenticationError extends APIStatusError {}
 /** 402 — the key is valid but the plan's Fair Use record limit is reached. */
 export class FairUsageLimitError extends APIStatusError {}
 
-/**
- * @deprecated Renamed to {@link FairUsageLimitError} — the API's `402` is a Fair Use
- * record-limit response, and "credits" is no longer Blitz vocabulary. This is an alias
- * for the same class (not a subclass), so existing `instanceof` checks keep working
- * unchanged. It will be removed in a future major.
- */
-export const InsufficientCreditsError = FairUsageLimitError;
-/** @deprecated Renamed to {@link FairUsageLimitError}. */
-export type InsufficientCreditsError = FairUsageLimitError;
-
 /** 404 — the API key or resource does not exist. */
 export class NotFoundError extends APIStatusError {}
 
