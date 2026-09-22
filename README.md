@@ -357,7 +357,7 @@ import {
   APITimeoutError,
   AuthenticationError,
   BlitzError,
-  FairUsageLimitError,
+  InsufficientRecordsError,
   NotFoundError,
   RateLimitError,
   ServerError,
@@ -366,7 +366,7 @@ import {
 try {
   await client.enrichment.email({ person_linkedin_url: "..." });
 } catch (err) {
-  if (err instanceof FairUsageLimitError) {
+  if (err instanceof InsufficientRecordsError) {
     // 402 — Fair Use record limit reached
   } else if (err instanceof AuthenticationError) {
     // 401 — bad key
@@ -380,9 +380,12 @@ try {
 }
 ```
 
-The `InsufficientCreditsError` alias deprecated in 2.0.0 is **removed** in this
-release — catch `FairUsageLimitError` instead. It was always the same class object, so
-the change is a rename at the import site only.
+The 402 class is **`InsufficientRecordsError`** as of 3.0.0, matching `blitz-api-py`;
+`FairUsageLimitError` stays exported as a **deprecated** alias for the same class (so
+`instanceof` keeps working) and goes in 4.0.0. One catch: `err.name` is
+`"InsufficientRecordsError"` from 3.0.0 on, so if you compare that string rather than
+using `instanceof`, update it now. The older `InsufficientCreditsError` alias, deprecated
+in 2.0.0, is **removed** in this release.
 
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
 `max_retries`; `401`/`402`/`404` throw immediately. A **pre-response** network

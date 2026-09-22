@@ -13,7 +13,7 @@ import {
   APIStatusError,
   type APIStatusErrorOptions,
   AuthenticationError,
-  FairUsageLimitError,
+  InsufficientRecordsError,
   NotFoundError,
   RateLimitError,
   ServerError,
@@ -90,7 +90,7 @@ type StatusErrorCtor = new (message: string, options: APIStatusErrorOptions) => 
 // APIStatusError (or ServerError for any 5xx).
 const STATUS_ERRORS: Record<number, StatusErrorCtor> = {
   401: AuthenticationError,
-  402: FairUsageLimitError,
+  402: InsufficientRecordsError,
   404: NotFoundError,
   429: RateLimitError,
 };

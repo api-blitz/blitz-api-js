@@ -10,6 +10,7 @@ import {
   BlitzAPI,
   BlitzError,
   FairUsageLimitError,
+  InsufficientRecordsError,
   NotFoundError,
 } from "../src/index.js";
 import { FakeFetch, jsonResponse, textResponse } from "./helpers/clock.js";
@@ -25,7 +26,7 @@ function client(fetch: typeof globalThis.fetch): BlitzAPI {
 describe("status errors", () => {
   it.each([
     [401, AuthenticationError],
-    [402, FairUsageLimitError],
+    [402, InsufficientRecordsError],
     [404, NotFoundError],
     [400, APIStatusError],
     [418, APIStatusError],
@@ -49,12 +50,25 @@ describe("status errors", () => {
     const error = await client(ff.fetch)
       .account.key_info()
       .catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(FairUsageLimitError);
-    const err = error as FairUsageLimitError;
+    expect(error).toBeInstanceOf(InsufficientRecordsError);
+    const err = error as InsufficientRecordsError;
     expect(err.status_code).toBe(402);
     expect(err.message).toBe(FAIR_USE_MESSAGE);
     expect(err.body).toEqual({ message: FAIR_USE_MESSAGE });
     expect(err.request_id).toBe("req_123");
+  });
+
+  it("exposes the 402 under its new name, with FairUsageLimitError aliased to it", async () => {
+    // Same class object, not a subclass — a subclass would silently make
+    // `instanceof FairUsageLimitError` false for the error the client actually throws.
+    expect(FairUsageLimitError).toBe(InsufficientRecordsError);
+    const ff = new FakeFetch([jsonResponse({ message: FAIR_USE_MESSAGE }, { status: 402 })]);
+    const error = await client(ff.fetch)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(FairUsageLimitError);
+    // `error.name` comes from `new.target.name`, so it follows the rename immediately.
+    expect((error as Error).name).toBe("InsufficientRecordsError");
   });
 
   it("no longer exports the removed InsufficientCreditsError alias", () => {

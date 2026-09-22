@@ -356,7 +356,7 @@ export interface CompanyJobsParams extends CursorPaginatedParams {
  * companies from live hiring signals (each result is a company plus how many of
  * its current postings matched). Cursor-paginated. The API bills **1 record per
  * result returned** (up to `max_results`). Can raise `AuthenticationError` (401),
- * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ * `InsufficientRecordsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
 export interface TamByJobsParams extends CursorPaginatedParams {
   /** Job-level filters plus `min_per_company` (see {@link TamJobFilter}). */
@@ -371,7 +371,7 @@ export interface TamByJobsParams extends CursorPaginatedParams {
  * plus how many of its current employees matched). Takes the same filters as
  * `search.people`. Cursor-paginated. The API bills **1 record per result
  * returned** (up to `max_results`). Can raise `AuthenticationError` (401),
- * `FairUsageLimitError` (402), `RateLimitError` (429), or `ServerError` (5xx).
+ * `InsufficientRecordsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
 export interface TamByPeopleParams extends CursorPaginatedParams {
   /** Company firmographics — the same block as `search.people` ({@link PeopleCompanyFilter}). */

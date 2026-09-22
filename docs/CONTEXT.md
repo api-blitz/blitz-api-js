@@ -237,7 +237,7 @@ BlitzError
 ├── APIResponseValidationError                 # 2xx body not JSON / wrong shape; .status_code, .request_id, .cause
 └── APIStatusError                             # non-2xx; .status_code, .body, .message, .request_id
     ├── AuthenticationError  # 401
-    ├── FairUsageLimitError  # 402
+    ├── InsufficientRecordsError  # 402
     ├── NotFoundError        # 404
     ├── RateLimitError       # 429 (only after retries exhausted)
     └── ServerError          # 5xx (only after retries exhausted)
@@ -246,12 +246,19 @@ BlitzError
 Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
 `error.name` is set per class via `new.target.name`.
 
-`InsufficientCreditsError` — the 2.0.0-era deprecated alias of `FairUsageLimitError` —
-was **removed on 2026-09-22**, in the next major after the one it was scheduled for. A
-test pins its absence from the export surface. While it existed it was bound to the same
-class object rather than a subclass, since the client throws `FairUsageLimitError` and a
-subclass would have made `instanceof InsufficientCreditsError` false for exactly the
-callers the alias existed for.
+The 402 class is **`InsufficientRecordsError`**, matching `blitz-api-py`. Two aliases
+have pointed at it over time, both bound to the same class object rather than subclassed
+— a subclass would make `instanceof <alias>` false for the error the client actually
+throws, breaking exactly the callers an alias exists for:
+
+| alias | status |
+| --- | --- |
+| `InsufficientCreditsError` | **removed 2026-09-22** (3.0.0), one major later than scheduled. A test pins its absence from the export surface. |
+| `FairUsageLimitError` | **deprecated 2026-09-22** (3.0.0), the 2.0.0-era name. Scheduled for removal in 4.0.0. |
+
+Note `error.name` comes from `new.target.name`, so it is `"InsufficientRecordsError"`
+from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, not in
+4.0.0 — the alias only covers `instanceof` and imports.
 
 ---
 
@@ -417,10 +424,22 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   an empty page while the cursor is live: there a sparse intermediate page can precede a
   full one, so the same guard would truncate a valid walk. The asymmetry is now a comment
   on both classes so the next reader doesn't "fix" it into symmetry.
-  **Left open:** #25's gap 2, the 402 class name (`FairUsageLimitError` here,
-  `InsufficientRecordsError` in `blitz-api-py`). It is the single error name that differs
-  across the two SDKs, but picking the winner is a product call and renaming the loser is
-  a breaking change on whichever side moves — not something to decide inside a sync PR.
+  **(4) Settled #25's gap 2, the 402 class name:** `FairUsageLimitError` →
+  **`InsufficientRecordsError`**, matching `blitz-api-py`. Owner's call; JS moves, so JS
+  takes the breakage. It was the single error name of the ten that differed across the two
+  SDKs, and the one a user meets when they run out of records, so the divergence was
+  concentrated in the worst place. The winning name describes the resource that ran out
+  rather than the policy that rejected the call, which is also the vocabulary the rest of
+  the API already uses (`records_used`, `records_remaining`, `fair_usage.records_remaining`).
+
+  `FairUsageLimitError` ships as a deprecated alias bound to the same class object, on the
+  2.0.0 precedent, scheduled for 4.0.0. Adding an alias in the same release that deletes
+  `InsufficientCreditsError` is not a contradiction: that one had outlived its schedule by
+  a major, this one starts its clock now. The alias covers `instanceof` and imports but
+  **not** `error.name`, which comes from `new.target.name` and reads
+  `"InsufficientRecordsError"` immediately — so string comparisons break in 3.0.0 rather
+  than 4.0.0, and the README and the `@deprecated` tag both say so, since a silent break
+  is the whole failure mode an alias exists to prevent.
 
 - **2026-09-22** — Changelog re-pull before merging the sync branch, per the "start any sync
   at `GET /changelog/`" rule — which the 2026-09-15 pass had not re-run, so it missed two
