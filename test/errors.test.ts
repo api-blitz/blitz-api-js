@@ -58,6 +58,29 @@ describe("status errors", () => {
     expect(err.request_id).toBe("req_123");
   });
 
+  it("surfaces a 422 field list, with the one-line summary as the message", async () => {
+    // The `ValidationError` body the docs mirror documents since 2026-09-28:
+    // `{ success, message, errors: [{ field, message }] }`. `message` summarises the first
+    // three problems; `errors` is where a caller finds what to fix, so it must stay on
+    // `.body`. An unknown field — e.g. a request field this SDK sends before the API
+    // accepts it — lands here. The wording below is illustrative; the docs say it can change.
+    const body = {
+      success: false,
+      message: "body: unknown field is_recent_hire",
+      errors: [{ field: "body", message: "unknown field is_recent_hire" }],
+    };
+    const ff = new FakeFetch([jsonResponse(body, { status: 422 })]);
+    const error = await client(ff.fetch)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    // No dedicated class for 422: it is a plain, non-retried `APIStatusError`.
+    expect(error).toBeInstanceOf(APIStatusError);
+    const err = error as APIStatusError;
+    expect(err.status_code).toBe(422);
+    expect(err.message).toBe(body.message);
+    expect(err.body).toEqual(body);
+  });
+
   it("exposes the 402 under its new name, with FairUsageLimitError aliased to it", async () => {
     // Same class object, not a subclass — a subclass would silently make
     // `instanceof FairUsageLimitError` false for the error the client actually throws.

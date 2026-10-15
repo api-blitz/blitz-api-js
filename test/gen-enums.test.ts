@@ -21,6 +21,7 @@ const LAST_FUNDING_TYPE = ["Series A", "Seed"];
 const SENIORITY = ["0-2", "2-5"];
 const EMPLOYMENT_TYPE = ["FULL_TIME", "INTERN"];
 const WORK_ARRANGEMENT = ["On-site", "Hybrid"];
+const MX_PROVIDER = ["any", "google"];
 
 const DEFAULTS = {
   industry: INDUSTRY,
@@ -34,6 +35,7 @@ const DEFAULTS = {
   seniority: SENIORITY,
   employment_type: EMPLOYMENT_TYPE,
   work_arrangement: WORK_ARRANGEMENT,
+  provider: MX_PROVIDER,
 };
 
 /** `{ include: {items.enum}, exclude: {items.enum} }` — the industry/type shape. */
@@ -85,6 +87,7 @@ function companyBlock(v: typeof DEFAULTS) {
       type: filterProp(v.type),
       employee_range: arrayEnumProp(v.employee_range),
       last_funding_type: filterProp(v.last_funding_type),
+      mx: objSchema({ provider: filterProp(v.provider) }),
       hq: objSchema({
         continent: arrayEnumProp(v.continent),
         sales_region: arrayEnumProp(v.sales_region),
@@ -113,7 +116,7 @@ function jobsBlock(v: typeof DEFAULTS) {
 }
 
 /**
- * A complete spec mirroring the real one: all 11 enums, each repeated across two
+ * A complete spec mirroring the real one: all 12 enums, each repeated across two
  * content-types (json + multipart) and, for industry/type, include + exclude,
  * plus continent/sales_region under both companies.hq and employee-finder, and
  * the jobs block contributing the three job-posting enums (and `company.size`,
@@ -141,7 +144,7 @@ function fullSpec(overrides: Partial<typeof DEFAULTS> = {}) {
 }
 
 describe("extractEnums", () => {
-  it("maps all 11 owning properties to class names, in canonical order", () => {
+  it("maps all 12 owning properties to class names, in canonical order", () => {
     const enums = extractEnums(fullSpec());
     expect(Object.keys(enums)).toEqual([
       "Industry",
@@ -155,6 +158,7 @@ describe("extractEnums", () => {
       "Seniority",
       "EmploymentType",
       "WorkArrangement",
+      "MxProvider",
     ]);
     expect(enums).toEqual({
       Industry: INDUSTRY,
@@ -168,16 +172,17 @@ describe("extractEnums", () => {
       Seniority: SENIORITY,
       EmploymentType: EMPLOYMENT_TYPE,
       WorkArrangement: WORK_ARRANGEMENT,
+      MxProvider: MX_PROVIDER,
     });
   });
 
   it("collapses two properties sharing one class name into a single entry", () => {
     // `employee_range` and `company.size` carry the same buckets and both map to
     // EmployeeRange, so the shared class name must not open a second output slot —
-    // 12 keys here would mean `size` grew a class of its own.
+    // 13 keys here would mean `size` grew a class of its own.
     const enums = extractEnums(fullSpec());
     expect(enums.EmployeeRange).toEqual(EMPLOYEE_RANGE);
-    expect(Object.keys(enums)).toHaveLength(11);
+    expect(Object.keys(enums)).toHaveLength(12);
   });
 
   it("throws when a property sharing a class name diverges from it", () => {
@@ -257,7 +262,7 @@ describe("extractEnums", () => {
     try {
       const enums = extractEnums(spec);
       expect(enums).not.toHaveProperty("Field");
-      expect(Object.keys(enums)).toHaveLength(11);
+      expect(Object.keys(enums)).toHaveLength(12);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("field"));
     } finally {
       warn.mockRestore();
@@ -301,7 +306,7 @@ describe("extractEnums", () => {
     };
     const enums = extractEnums(spec);
     expect(enums.CompanyType).toEqual(COMPANY_TYPE);
-    expect(Object.keys(enums)).toHaveLength(11);
+    expect(Object.keys(enums)).toHaveLength(12);
   });
 });
 

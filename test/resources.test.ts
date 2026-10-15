@@ -2,6 +2,13 @@
 
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
+import type {
+  CompanyLinkedinUrlParams,
+  CompanySearchParams,
+  EmployeeFinderParams,
+  PeopleSearchParams,
+  TamByPeopleParams,
+} from "../src/index.js";
 import {
   APITimeoutError,
   BlitzAPI,
@@ -11,6 +18,7 @@ import {
   CurrentDateResponse,
   EmailEnrichmentResponse,
   INDUSTRY,
+  MX_PROVIDER,
   PersonEnrichmentResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
@@ -498,5 +506,167 @@ describe("resources", () => {
     expect(calls).toBe(2);
     expect(collected).toHaveLength(2);
     for (const sent of bodies) expect(sent).not.toHaveProperty("timeout");
+  });
+});
+
+describe("2026-10-14 request fields", () => {
+  const COMPANY_URL = "https://www.linkedin.com/company/openai";
+
+  /** Records the JSON body of the next POST to `path` and answers with `payload`. */
+  function capture(path: string, payload: unknown): () => unknown {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}${path}`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(payload as Record<string, unknown>);
+      }),
+    );
+    return () => body;
+  }
+
+  it("search.people sends is_recent_hire at the top level, never under people", async () => {
+    const sent = capture("/v2/search/people", data.PEOPLE_SEARCH);
+    await client().search.people({
+      is_recent_hire: true,
+      include_active_jobs: false,
+      include_past_jobs: true,
+      company: { mx: { provider: { include: ["google"], exclude: ["zoho"] } } },
+      people: {
+        education: {
+          include: ["Stanford"],
+          start_year: { min: 2010, max: 2015 },
+          end_year: { min: 2014 },
+        },
+      },
+      max_results: 1,
+    });
+    expect(sent()).toEqual({
+      is_recent_hire: true,
+      include_active_jobs: false,
+      include_past_jobs: true,
+      company: { mx: { provider: { include: ["google"], exclude: ["zoho"] } } },
+      people: {
+        education: {
+          include: ["Stanford"],
+          start_year: { min: 2010, max: 2015 },
+          end_year: { min: 2014 },
+        },
+      },
+      max_results: 1,
+    });
+    expect(sent()).not.toHaveProperty("people.is_recent_hire");
+  });
+
+  it("company.tam_by_people sends is_recent_hire at the top level, plus mx and education years", async () => {
+    const sent = capture("/v2/company/tam-by-people", data.TAM_BY_PEOPLE);
+    await client().company.tam_by_people({
+      is_recent_hire: true,
+      company: { mx: { provider: { include: ["any"], exclude: ["google"] } } },
+      people: { education: { end_year: { min: 2020, max: 2024 } }, min_per_company: 2 },
+      max_results: 1,
+    });
+    expect(sent()).toEqual({
+      is_recent_hire: true,
+      company: { mx: { provider: { include: ["any"], exclude: ["google"] } } },
+      people: { education: { end_year: { min: 2020, max: 2024 } }, min_per_company: 2 },
+      max_results: 1,
+    });
+    expect(sent()).not.toHaveProperty("people.is_recent_hire");
+  });
+
+  it("search.companies sends the mx provider filter", async () => {
+    const sent = capture("/v2/search/companies", data.COMPANY_SEARCH);
+    await client().search.companies({
+      company: { mx: { provider: { include: ["microsoft", "google"] } } },
+      max_results: 1,
+    });
+    expect(sent()).toEqual({
+      company: { mx: { provider: { include: ["microsoft", "google"] } } },
+      max_results: 1,
+    });
+  });
+
+  it("MX_PROVIDER is generated from the spec and holds the `any` sentinel", () => {
+    // `any` stands for every provider (include = has MX data, exclude = has none), so it
+    // must autocomplete as an MxProviderValue rather than only work as a raw string.
+    expect(MX_PROVIDER).toEqual(expect.arrayContaining(["any", "google", "microsoft", "zoho"]));
+    expect(MX_PROVIDER).toHaveLength(66);
+  });
+
+  it("search.employee_finder sends is_recent_hire", async () => {
+    const sent = capture("/v2/search/employee-finder", data.EMPLOYEE_FINDER);
+    await client().search.employee_finder({
+      company_linkedin_url: COMPANY_URL,
+      is_recent_hire: true,
+      max_results: 1,
+    });
+    expect(sent()).toEqual({
+      company_linkedin_url: COMPANY_URL,
+      is_recent_hire: true,
+      max_results: 1,
+      page: 1,
+    });
+  });
+
+  it("search.waterfall_icp sends is_recent_hire and the job-history flags", async () => {
+    const sent = capture("/v2/search/waterfall-icp-keyword", data.WATERFALL_ICP);
+    await client().search.waterfall_icp({
+      company_linkedin_url: COMPANY_URL,
+      cascade: [{ include_title: ["CEO"], location: ["US"] }],
+      is_recent_hire: true,
+      include_active_jobs: true,
+      include_past_jobs: true,
+    });
+    expect(sent()).toEqual({
+      company_linkedin_url: COMPANY_URL,
+      cascade: [{ include_title: ["CEO"], location: ["US"] }],
+      is_recent_hire: true,
+      include_active_jobs: true,
+      include_past_jobs: true,
+    });
+  });
+
+  it.each([
+    ["country", "/v2/enrichment/company-distribution-by-country", data.EMPLOYMENT_DISTRIBUTION],
+    [
+      "department",
+      "/v2/enrichment/company-distribution-by-department",
+      data.DEPARTMENT_DISTRIBUTION,
+    ],
+  ] as const)("enrichment.company_distribution_by_%s sends is_recent_hire", async (which, path, payload) => {
+    const sent = capture(path, payload);
+    const params = { company_linkedin_url: COMPANY_URL, is_recent_hire: true };
+    const result =
+      which === "country"
+        ? await client().enrichment.company_distribution_by_country(params)
+        : await client().enrichment.company_distribution_by_department(params);
+    expect(result.found).toBe(true);
+    expect(sent()).toEqual(params);
+  });
+
+  it("omits every new field when unset, so existing calls are byte-for-byte unchanged", async () => {
+    const sent = capture("/v2/search/people", data.PEOPLE_SEARCH);
+    await client().search.people({ people: { job_title: { include: ["Engineer"] } } });
+    expect(sent()).toEqual({ people: { job_title: { include: ["Engineer"] } } });
+  });
+
+  it("makes a field the endpoint would reject a compile error", () => {
+    // The API answers an unknown field with a 422 (since 2026-09-28), and a nested
+    // `people.is_recent_hire` is one — so the params types must refuse each of these.
+    // `pnpm typecheck` is what enforces it (an unused `@ts-expect-error` fails there);
+    // these are bare assignments, so nothing is sent.
+    const url = { company_linkedin_url: COMPANY_URL };
+    // @ts-expect-error `is_recent_hire` is a top-level field, not a `people` one
+    const nested: PeopleSearchParams = { people: { is_recent_hire: true } };
+    // @ts-expect-error `enrichment.company` has no `is_recent_hire`
+    const company: CompanyLinkedinUrlParams = { ...url, is_recent_hire: true };
+    // @ts-expect-error `search.companies` has no `is_recent_hire`
+    const companies: CompanySearchParams = { is_recent_hire: true };
+    // @ts-expect-error `search.employee_finder` has no job-history flags
+    const finder: EmployeeFinderParams = { ...url, include_past_jobs: true };
+    // `company.tam_by_people` matches current employees only, so it has no job-history flags.
+    // @ts-expect-error `include_past_jobs` is not a `company.tam_by_people` field
+    const tam: TamByPeopleParams = { include_past_jobs: true };
+    expect([nested, company, companies, finder, tam]).toHaveLength(5);
   });
 });

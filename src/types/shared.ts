@@ -14,9 +14,11 @@ import { blitzList, blitzObject } from "./models.js";
 /**
  * A geographic location attached to a person or a job.
  *
- * `postal_code`/`street_address` are only returned on a person's `location`;
- * `Experience.job_location` and `Job.location` populate a narrower subset. Every
- * field is optional on the one superset model.
+ * Deliberately a superset: the spec lists all six keys only on a person's `location`,
+ * `Experience.job_location` carries `city`/`country_code`/`state_code`, and `Job.location`
+ * only `city`/`country_code`. The keys a site doesn't send are just `undefined` — every
+ * field is optional on the one model, so no per-site copies are needed. `docs/CONTEXT.md`
+ * §7 lists exactly which extras appear where.
  */
 export const Location = blitzObject({
   city: z.string().nullish(),
@@ -40,6 +42,10 @@ export const Experience = blitzObject({
   job_description: z.string().nullish(),
   job_start_date: z.string().nullish(),
   job_end_date: z.string().nullish(),
+  /**
+   * Whether this is a current position. On `search.people` and `search.waterfall_icp`
+   * it tells a current match from a past one when `include_past_jobs` is set.
+   */
   job_is_current: z.boolean().nullish(),
   /**
    * How the role is contracted (e.g. `Full-time`). Free-form upstream, so it is
@@ -102,7 +108,8 @@ export const Person = blitzObject({
    * How much of the career is returned depends on the endpoint. `search.people`
    * sends the position that matched the query — in practice a single entry, so treat
    * it as one and don't read it as a career (since 2026-09-21; the API reference page
-   * still describes the old full-history behaviour and is out of date).
+   * still describes the old full-history behaviour and is out of date). With
+   * `include_past_jobs` that position may be a past one — check `job_is_current`.
    * `enrichment.person` and the reverse lookups send every position held, in profile
    * order.
    */
@@ -120,7 +127,8 @@ export type Person = z.infer<typeof Person>;
  * the 2026-09-15 sync they appear on no endpoint and in no example). They are kept
  * as optional fields rather than removed: they cost nothing when absent, and
  * dropping them would break callers for a change upstream never announced. Expect
- * them to be `undefined`.
+ * them to be `undefined`. (They are one of the two deliberate spec-vs-SDK supersets —
+ * see `docs/CONTEXT.md` §7 — alongside {@link Location}.)
  */
 export const HQ = blitzObject({
   city: z.string().nullish(),

@@ -238,6 +238,7 @@ export const CURRENT_DATE = {
 };
 
 export const EMPLOYMENT_DISTRIBUTION = {
+  found: true,
   company_linkedin_url: "https://www.linkedin.com/company/openai",
   total_employees: 1234,
   distribution: [
@@ -247,6 +248,7 @@ export const EMPLOYMENT_DISTRIBUTION = {
 };
 
 export const DEPARTMENT_DISTRIBUTION = {
+  found: true,
   company_linkedin_url: "https://www.linkedin.com/company/openai",
   total_employees: 1234,
   distribution: [

@@ -169,6 +169,7 @@ describe("response models", () => {
 
   it("parses distribution by country", () => {
     const resp = CompanyDistributionByCountryResponse.parse(data.EMPLOYMENT_DISTRIBUTION);
+    expect(resp.found).toBe(true);
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.country).toBe("US");
     expect(resp.distribution[0]?.count).toBe(900);
@@ -177,10 +178,32 @@ describe("response models", () => {
 
   it("parses distribution by department", () => {
     const resp = CompanyDistributionByDepartmentResponse.parse(data.DEPARTMENT_DISTRIBUTION);
+    expect(resp.found).toBe(true);
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.department).toBe("Engineering");
     expect(resp.distribution[0]?.count).toBe(320);
     expect(resp.distribution[0]?.percentage_ratio).toBe(25.93);
+  });
+
+  it.each([
+    ["country", CompanyDistributionByCountryResponse],
+    ["department", CompanyDistributionByDepartmentResponse],
+  ])("declares `found` on the distribution-by-%s response", (_name, Response) => {
+    // `blitzObject` preserves an undeclared key, so the value-based assertions above
+    // would pass even if `found` were missing from the schema; check the shape itself.
+    expect(Object.keys(Response.shape)).toContain("found");
+  });
+
+  it.each([
+    ["country", CompanyDistributionByCountryResponse],
+    ["department", CompanyDistributionByDepartmentResponse],
+  ])("parses a distribution-by-%s miss (found: false) with no payload", (_name, Response) => {
+    // `found: false` (unknown company, or no current employees) is free. Neither spec
+    // shows what else a miss carries, so this only pins that the payload fields are
+    // optional — a miss must parse to an empty distribution, never throw.
+    const resp = Response.parse({ found: false });
+    expect(resp.found).toBe(false);
+    expect(resp.distribution).toEqual([]);
   });
 
   it("parses tam by jobs (a company + matched_jobs, no total_results)", () => {

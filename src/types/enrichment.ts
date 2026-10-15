@@ -88,7 +88,10 @@ export const LinkedinToDomainResponse = v2_response({
 });
 export type LinkedinToDomainResponse = z.infer<typeof LinkedinToDomainResponse>;
 
-/** Employee count for a single country (ISO 3166-1 alpha-2; `unknown` when undetermined). */
+/**
+ * Headcount for a single country (ISO 3166-1 alpha-2; `unknown` when undetermined).
+ * Counts **people**, not jobs — see {@link CompanyDistributionByCountryResponse}.
+ */
 export const CountryDistributionItem = blitzObject({
   country: z.string().nullish(),
   count: z.number().nullish(),
@@ -96,8 +99,15 @@ export const CountryDistributionItem = blitzObject({
 });
 export type CountryDistributionItem = z.infer<typeof CountryDistributionItem>;
 
-/** Result of `enrichment.company_distribution_by_country`. */
+/**
+ * Result of `enrichment.company_distribution_by_country`.
+ *
+ * On `found: false` (the company is unknown or has no current employees) no record is
+ * charged. Since 2026-10-14 `count` and `total_employees` count **people** rather than
+ * jobs, so a second job held by the same person at the company is no longer counted.
+ */
 export const CompanyDistributionByCountryResponse = v2_response({
+  found: z.boolean().nullish(),
   company_linkedin_url: z.string().nullish(),
   total_employees: z.number().nullish(),
   distribution: blitzList(CountryDistributionItem),
@@ -106,7 +116,7 @@ export type CompanyDistributionByCountryResponse = z.infer<
   typeof CompanyDistributionByCountryResponse
 >;
 
-/** Employee count for a single department (`Other` when unclassified). */
+/** Headcount for a single department (`Other` when unclassified). */
 export const DepartmentDistributionItem = blitzObject({
   department: z.string().nullish(),
   count: z.number().nullish(),
@@ -114,8 +124,14 @@ export const DepartmentDistributionItem = blitzObject({
 });
 export type DepartmentDistributionItem = z.infer<typeof DepartmentDistributionItem>;
 
-/** Result of `enrichment.company_distribution_by_department`. */
+/**
+ * Result of `enrichment.company_distribution_by_department`.
+ *
+ * On `found: false` (the company is unknown or has no current employees) no record is
+ * charged.
+ */
 export const CompanyDistributionByDepartmentResponse = v2_response({
+  found: z.boolean().nullish(),
   company_linkedin_url: z.string().nullish(),
   total_employees: z.number().nullish(),
   distribution: blitzList(DepartmentDistributionItem),

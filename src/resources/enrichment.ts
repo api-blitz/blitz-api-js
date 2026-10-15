@@ -14,6 +14,7 @@ import {
   PhoneToPersonResponse,
 } from "../types/enrichment.js";
 import type {
+  CompanyDistributionParams,
   CompanyLinkedinUrlParams,
   DomainToLinkedinParams,
   EmailToPersonParams,
@@ -119,9 +120,12 @@ export class EnrichmentResource {
     );
   }
 
-  /** Get a company's employee count broken down by country ("unknown" when undetermined). */
+  /**
+   * Get a company's headcount broken down by country ("unknown" when undetermined).
+   * Counts **people**, not jobs. Costs **1 record on success**; `found: false` is free.
+   */
   company_distribution_by_country(
-    params: CompanyLinkedinUrlParams,
+    params: CompanyDistributionParams,
     options?: RequestOptions,
   ): Promise<CompanyDistributionByCountryResponse> {
     return this.client.request(
@@ -133,9 +137,12 @@ export class EnrichmentResource {
     );
   }
 
-  /** Get a company's employee count broken down by department ("Other" when unclassified). */
+  /**
+   * Get a company's headcount broken down by department ("Other" when unclassified).
+   * Costs **1 record on success**; `found: false` is free.
+   */
   company_distribution_by_department(
-    params: CompanyLinkedinUrlParams,
+    params: CompanyDistributionParams,
     options?: RequestOptions,
   ): Promise<CompanyDistributionByDepartmentResponse> {
     return this.client.request(
