@@ -72,6 +72,7 @@ const PROPERTY_TO_CLASS: Record<string, string> = {
   seniority: "Seniority",
   employment_type: "EmploymentType",
   work_arrangement: "WorkArrangement",
+  provider: "MxProvider",
 };
 
 /** OpenAPI/JSON-Schema keywords skipped when resolving an enum's owning property. */

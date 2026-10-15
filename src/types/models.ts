@@ -17,8 +17,8 @@ export const blitzObject = <T extends z.ZodRawShape>(shape: T) => z.looseObject(
  * `null` from the API would throw and break deserialization. These fields are
  * array-or-omitted today, but tolerating `null` too keeps a future `null`-for-empty
  * list from breaking the parse — same forward-compat intent as {@link blitzObject}.
- * Fields the API documents as genuinely nullable (e.g. `Company.specialties`) stay
- * `.nullish()` so they can still surface `null`.
+ * Every `array | null` list goes through here with no exemption: the spec types them
+ * all alike, so an exempt list would just move a `null` check onto callers.
  */
 export const blitzList = <T extends z.ZodType>(item: T) =>
   z

@@ -5,6 +5,7 @@ import * as z from "zod";
 import * as api from "../src/index.js";
 import {
   ChangelogResponse,
+  Company,
   CompanyDistributionByCountryResponse,
   CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
@@ -14,11 +15,13 @@ import {
   DomainToLinkedinResponse,
   Education,
   EmailEnrichmentResponse,
+  EmailMatch,
   EmailToPersonResponse,
   EmployeeFinderResponse,
   JobSearchResponse,
   KeyInfo,
   LinkedinToDomainResponse,
+  MxRecord,
   PeopleSearchResponse,
   PersonEnrichmentResponse,
   PhoneEnrichmentResponse,
@@ -126,6 +129,8 @@ describe("response models", () => {
     expect(resp.found).toBe(true);
     expect(resp.email).toBe("antoine@blitz-agency.com");
     expect(resp.all_emails[0]?.email_domain).toBe("blitz-agency.com");
+    expect(resp.mx).toEqual(data.MX_RECORDS);
+    expect(resp.all_emails[0]?.mx).toEqual(data.MX_RECORDS);
   });
 
   it("parses phone enrichment", () => {
@@ -147,6 +152,29 @@ describe("response models", () => {
   it("parses company enrichment", () => {
     const resp = CompanyEnrichmentResponse.parse(data.COMPANY_ENRICHMENT);
     expect(resp.company?.domain).toBe("google.com");
+    expect(resp.company?.mx).toEqual(data.MX_RECORDS);
+  });
+
+  it("declares mx on the company and email models", () => {
+    // `blitzObject` preserves an undeclared key, so the value assertions above would pass
+    // even if `mx` were missing from the schema; check the shapes themselves.
+    expect(Object.keys(Company.shape)).toContain("mx");
+    expect(Object.keys(EmailMatch.shape)).toContain("mx");
+    expect(Object.keys(EmailEnrichmentResponse.shape)).toContain("mx");
+    expect(Object.keys(MxRecord.shape).sort()).toEqual(["host", "priority"]);
+  });
+
+  it("keeps mx null, [] and absent distinct (it is not coerced like other lists)", () => {
+    // company.mx: `null` = no MX data yet, `[]` = the domain takes no mail. Coercing
+    // either into the other (as `blitzList` does) would make a caller read "no data" as
+    // "takes no mail", so `mx` must come back exactly as sent.
+    expect(Company.parse({ mx: null }).mx).toBeNull();
+    expect(Company.parse({ mx: [] }).mx).toEqual([]);
+    expect(Company.parse({}).mx).toBeUndefined();
+    expect(EmailMatch.parse({ mx: null }).mx).toBeNull();
+    expect(EmailEnrichmentResponse.parse({ mx: [] }).mx).toEqual([]);
+    // Every other list still coerces: this is the single, deliberate exception.
+    expect(Company.parse({ specialties: null }).specialties).toEqual([]);
   });
 
   it("parses domain to linkedin", () => {
@@ -169,6 +197,7 @@ describe("response models", () => {
 
   it("parses distribution by country", () => {
     const resp = CompanyDistributionByCountryResponse.parse(data.EMPLOYMENT_DISTRIBUTION);
+    expect(resp.found).toBe(true);
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.country).toBe("US");
     expect(resp.distribution[0]?.count).toBe(900);
@@ -177,10 +206,32 @@ describe("response models", () => {
 
   it("parses distribution by department", () => {
     const resp = CompanyDistributionByDepartmentResponse.parse(data.DEPARTMENT_DISTRIBUTION);
+    expect(resp.found).toBe(true);
     expect(resp.total_employees).toBe(1234);
     expect(resp.distribution[0]?.department).toBe("Engineering");
     expect(resp.distribution[0]?.count).toBe(320);
     expect(resp.distribution[0]?.percentage_ratio).toBe(25.93);
+  });
+
+  it.each([
+    ["country", CompanyDistributionByCountryResponse],
+    ["department", CompanyDistributionByDepartmentResponse],
+  ])("declares `found` on the distribution-by-%s response", (_name, Response) => {
+    // `blitzObject` preserves an undeclared key, so the value-based assertions above
+    // would pass even if `found` were missing from the schema; check the shape itself.
+    expect(Object.keys(Response.shape)).toContain("found");
+  });
+
+  it.each([
+    ["country", CompanyDistributionByCountryResponse],
+    ["department", CompanyDistributionByDepartmentResponse],
+  ])("parses a distribution-by-%s miss (found: false) with no payload", (_name, Response) => {
+    // `found: false` (unknown company, or no current employees) is free. Neither spec
+    // shows what else a miss carries, so this only pins that the payload fields are
+    // optional — a miss must parse to an empty distribution, never throw.
+    const resp = Response.parse({ found: false });
+    expect(resp.found).toBe(false);
+    expect(resp.distribution).toEqual([]);
   });
 
   it("parses tam by jobs (a company + matched_jobs, no total_results)", () => {
@@ -263,6 +314,7 @@ describe("response models", () => {
       "HQ",
       "Job",
       "Location",
+      "MxRecord",
       "Person",
       "TamByJobsMatch",
       "TamByPeopleMatch",

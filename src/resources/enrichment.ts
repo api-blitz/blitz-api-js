@@ -14,6 +14,7 @@ import {
   PhoneToPersonResponse,
 } from "../types/enrichment.js";
 import type {
+  CompanyDistributionParams,
   CompanyLinkedinUrlParams,
   DomainToLinkedinParams,
   EmailToPersonParams,
@@ -51,7 +52,10 @@ export class EnrichmentResource {
     return this.client.request("POST", PERSON, params, PersonEnrichmentResponse, options);
   }
 
-  /** Find a verified work email from a LinkedIn profile URL. */
+  /**
+   * Find a verified work email from a LinkedIn profile URL. Also returns the MX records
+   * of the email's domain (`mx`, and per address in `all_emails[].mx`).
+   */
   email(
     params: PersonLinkedinUrlParams,
     options?: RequestOptions,
@@ -83,7 +87,10 @@ export class EnrichmentResource {
     return this.client.request("POST", PHONE_TO_PERSON, params, PhoneToPersonResponse, options);
   }
 
-  /** Resolve a company LinkedIn URL to a full company profile. */
+  /**
+   * Resolve a company LinkedIn URL to a full company profile, including the MX records of
+   * its domain (`company.mx`; `null` = no MX data, `[]` = the domain takes no mail).
+   */
   company(
     params: CompanyLinkedinUrlParams,
     options?: RequestOptions,
@@ -119,9 +126,12 @@ export class EnrichmentResource {
     );
   }
 
-  /** Get a company's employee count broken down by country ("unknown" when undetermined). */
+  /**
+   * Get a company's headcount broken down by country ("unknown" when undetermined).
+   * Counts **people**, not jobs. Costs **1 record on success**; `found: false` is free.
+   */
   company_distribution_by_country(
-    params: CompanyLinkedinUrlParams,
+    params: CompanyDistributionParams,
     options?: RequestOptions,
   ): Promise<CompanyDistributionByCountryResponse> {
     return this.client.request(
@@ -133,9 +143,12 @@ export class EnrichmentResource {
     );
   }
 
-  /** Get a company's employee count broken down by department ("Other" when unclassified). */
+  /**
+   * Get a company's headcount broken down by department ("Other" when unclassified).
+   * Costs **1 record on success**; `found: false` is free.
+   */
   company_distribution_by_department(
-    params: CompanyLinkedinUrlParams,
+    params: CompanyDistributionParams,
     options?: RequestOptions,
   ): Promise<CompanyDistributionByDepartmentResponse> {
     return this.client.request(

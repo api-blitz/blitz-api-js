@@ -3,7 +3,7 @@
 import * as z from "zod";
 import { v2_response } from "./envelopes.js";
 import { blitzList, blitzObject } from "./models.js";
-import { Company, Person } from "./shared.js";
+import { Company, MxRecords, Person } from "./shared.js";
 
 /**
  * Result of `enrichment.person` (LinkedIn profile URL -> full profile).
@@ -25,6 +25,8 @@ export const EmailMatch = blitzObject({
   job_order_in_profile: z.number().nullish(),
   company_linkedin_url: z.string().nullish(),
   email_domain: z.string().nullish(),
+  /** MX records of this address's domain; `null` when not resolved. See {@link MxRecords}. */
+  mx: MxRecords,
 });
 export type EmailMatch = z.infer<typeof EmailMatch>;
 
@@ -32,6 +34,8 @@ export type EmailMatch = z.infer<typeof EmailMatch>;
 export const EmailEnrichmentResponse = v2_response({
   found: z.boolean().nullish(),
   email: z.string().nullish(),
+  /** MX records of the returned email's domain; `null` when not resolved. See {@link MxRecords}. */
+  mx: MxRecords,
   all_emails: blitzList(EmailMatch),
 });
 export type EmailEnrichmentResponse = z.infer<typeof EmailEnrichmentResponse>;
@@ -88,7 +92,10 @@ export const LinkedinToDomainResponse = v2_response({
 });
 export type LinkedinToDomainResponse = z.infer<typeof LinkedinToDomainResponse>;
 
-/** Employee count for a single country (ISO 3166-1 alpha-2; `unknown` when undetermined). */
+/**
+ * Headcount for a single country (ISO 3166-1 alpha-2; `unknown` when undetermined).
+ * Counts **people**, not jobs — see {@link CompanyDistributionByCountryResponse}.
+ */
 export const CountryDistributionItem = blitzObject({
   country: z.string().nullish(),
   count: z.number().nullish(),
@@ -96,8 +103,15 @@ export const CountryDistributionItem = blitzObject({
 });
 export type CountryDistributionItem = z.infer<typeof CountryDistributionItem>;
 
-/** Result of `enrichment.company_distribution_by_country`. */
+/**
+ * Result of `enrichment.company_distribution_by_country`.
+ *
+ * On `found: false` (the company is unknown or has no current employees) no record is
+ * charged. Since 2026-10-14 `count` and `total_employees` count **people** rather than
+ * jobs, so a second job held by the same person at the company is no longer counted.
+ */
 export const CompanyDistributionByCountryResponse = v2_response({
+  found: z.boolean().nullish(),
   company_linkedin_url: z.string().nullish(),
   total_employees: z.number().nullish(),
   distribution: blitzList(CountryDistributionItem),
@@ -106,7 +120,7 @@ export type CompanyDistributionByCountryResponse = z.infer<
   typeof CompanyDistributionByCountryResponse
 >;
 
-/** Employee count for a single department (`Other` when unclassified). */
+/** Headcount for a single department (`Other` when unclassified). */
 export const DepartmentDistributionItem = blitzObject({
   department: z.string().nullish(),
   count: z.number().nullish(),
@@ -114,8 +128,14 @@ export const DepartmentDistributionItem = blitzObject({
 });
 export type DepartmentDistributionItem = z.infer<typeof DepartmentDistributionItem>;
 
-/** Result of `enrichment.company_distribution_by_department`. */
+/**
+ * Result of `enrichment.company_distribution_by_department`.
+ *
+ * On `found: false` (the company is unknown or has no current employees) no record is
+ * charged.
+ */
 export const CompanyDistributionByDepartmentResponse = v2_response({
+  found: z.boolean().nullish(),
   company_linkedin_url: z.string().nullish(),
   total_employees: z.number().nullish(),
   distribution: blitzList(DepartmentDistributionItem),

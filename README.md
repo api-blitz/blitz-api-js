@@ -236,6 +236,29 @@ const entries = await client.changelog.list({ days: 30 });
 for (const e of entries) console.log(e.date, e.type, e.title);
 ```
 
+`is_recent_hire` (people whose job started in the last 90 days) sits inside the `people`
+object on `search.people` and `company.tam_by_people`, inside each `cascade` tier on
+`search.waterfall_icp`, and is a top-level field on `search.employee_finder` and both
+`enrichment.company_distribution_by_*` methods. `search.people` and `search.waterfall_icp`
+can also match past jobs: `include_past_jobs` (in the same place) adds them, and
+`job_is_current` on the returned `experiences[]` entry says which kind matched.
+
+```ts
+// Recent hires at companies whose email runs on Google, graduated since 2015, past jobs included.
+for await (const person of client.search.people({
+  company: { mx: { provider: { include: ["google"] } } },
+  people: {
+    is_recent_hire: true,
+    include_past_jobs: true,
+    job_title: { include: ["Head of Sales"] },
+    education: { end_year: { min: 2015 } },
+  },
+  max_items: 100,
+})) {
+  console.log(person.full_name, person.experiences[0]?.job_is_current);
+}
+```
+
 ## Pagination
 
 `search.people`, `search.companies`, `jobs.search`, `jobs.company`,

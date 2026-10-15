@@ -13,6 +13,7 @@
     "LastFundingType": ["Series unknown","Pre seed","Seed","Series A","Series B","Series C","Series D","Series E-J","Grant","Angel","Private equity","Debt financing","Non equity assistance","Post IPO equity","Undisclosed","Post IPO debt","Product crowdfunding","Equity crowdfunding","Corporate round","Convertible note","Secondary market","Initial coin offering","Post IPO secondary"],
     "Seniority": ["0-2","2-5","5-10","10+"],
     "EmploymentType": ["FULL_TIME","PART_TIME","CONTRACTOR","TEMPORARY","INTERN","VOLUNTEER","PER_DIEM","OTHER"],
-    "WorkArrangement": ["On-site","Hybrid","Remote OK","Remote Solely"]
+    "WorkArrangement": ["On-site","Hybrid","Remote OK","Remote Solely"],
+    "MxProvider": ["any","google","microsoft","zoho","godaddy","proofpoint","mimecast","barracuda","cloudflare","ionos","hostinger","namecheap","fastmail","proton","strato","ovh","siteground","opensrs","one_com","tencent","titan","20i","rackspace","alibaba","open_xchange","infomaniak","jimdo","netease","gandi","register_it","hetzner","yahoo","amazon","yandex","locaweb","uol_host","fasthosts","kinghost","t_online","hostopia","united_domains","hostpoint","mijndomein","icloud","reg123","mailhostbox","transip","natro","names_co_uk","intermedia","hostnet","aruba","loopia","netcup","lolipop","simply","domeneshop","hornetsecurity","mailchannels","appriver","trendmicro","spamexperts","cisco","sophos","mesh","mailinblack"]
   }
 }

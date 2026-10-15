@@ -15,9 +15,9 @@ B2B data / GTM REST API (people & company search, contact enrichment, utilities)
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
 behaves the same way over all 21 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
-when changing any endpoint. (The `fair_usage` / `records_remaining` sync of
-2026-09-02 and the 2026-09-15 spec sync both still need mirroring in
-`blitz-api-py`.)
+when changing any endpoint. (As of 2026-10-15 `blitz-api-py`'s `main` carries the
+`fair_usage` / `records_remaining` sync, `tam_by_people` and the `field_of_study` removal;
+the 2026-10-14 sync is in flight there on a `sdk-is_recent_hire-update` branch.)
 
 Two design mandates:
 
@@ -44,14 +44,20 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   describe the same endpoints — see §3 for which to use for what. All endpoints are
   `/v2/...` (plus the public `/changelog/`).
 - **Status conventions**: 401 invalid/missing key · 402 Fair Use limit reached ·
-  404 not found · 422 invalid input (body `{success, error:{code, message}}`; documented
-  on `domain-to-linkedin`, but any endpoint can reject a malformed body — e.g. a filter
-  list over 50 entries) · 429 rate limited (wait 60s then retry) · **503 partial search
-  failure**, explicitly retriable, on `search.people`/`companies` and
-  `jobs.search`/`company` (since 2026-08-05 they return it instead of a truncated page) ·
-  5xx server error. The SDK already handles both correctly with no special-casing: 503
-  falls under `>= 500` so it retries as a `ServerError`, and 422 is a non-retried
-  `APIStatusError`.
+  404 not found · 422 invalid input — any `/v2` endpoint can reject a body, e.g. a filter
+  list over 50 entries or, since 2026-09-28, **an unknown field at any depth** (it used to be
+  dropped silently). Since that date the body is `{success: false, message, errors:
+  [{field, message}]}` (the docs mirror's `ValidationError`: `message` sums up the first three
+  problems, `errors` carries up to 20, each with a full field path); the runtime spec still
+  declares the older `{success, error:{code, message}}`, and only on `domain-to-linkedin`.
+  400 is a request body that is not valid JSON (the SDK always sends JSON) · 429 rate limited
+  (wait 60s then retry) · **503 partial search failure**, explicitly retriable — the runtime
+  spec declares it on all ten search, jobs, TAM and company-distribution endpoints (the docs
+  mirror lists it on four; since 2026-08-05 the search/jobs endpoints return it instead of a
+  truncated page) · 5xx server error. The SDK already handles all of it with no
+  special-casing: 503 falls under `>= 500` so it retries as a `ServerError`, and 422 is a
+  non-retried `APIStatusError` whose `message` is the body's one-line summary and whose
+  `body.errors` holds the field list.
 - **`fair_usage`**: every `/v2` response (and the `402` body) carries a per-request
   usage block — `records_used`, `records_remaining` (`number | "unlimited"`),
   `next_reset_at`, `rate_limit.{requests_per_second,remaining_this_second}`, and
@@ -206,7 +212,7 @@ src/
                   MeteredValue, FairUsage.
     enums.ts      GENERATED. Industry(535) + CompanyType/EmployeeRange/Continent/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
-                  EmploymentType/WorkArrangement. Never hand-edit (see §7).
+                  EmploymentType/WorkArrangement/MxProvider(66). Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
     account/search/jobs/company/enrichment/utils/changelog.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
@@ -280,11 +286,39 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   as unknown keys if the API ever does send them. Rule: a response field goes on a model
   only if the runtime spec's response `properties` or a docs-mirror example shows it —
   a hand-written test fixture is not evidence, it just confirms itself.
-- **`Location`** is reused for `Person.location`, `Experience.job_location`, and
-  `Job.location`. Only `Person.location` carries `postal_code`/`street_address`; the jobs
-  payload populates only `city`/`country_code`. Because every field is `.nullish()` on a
-  `blitzObject`, the superset parses all three unchanged rather than needing narrower
-  per-endpoint duplicates.
+- **`Location` and `HQ` are deliberate supersets: a response diff against the runtime spec
+  will always show these SDK-only fields, and they are not drift.** One `Location` model is
+  reused for `Person.location`, `Experience.job_location` and `Job.location`, which the spec
+  types with different key sets; `HQ` keeps two keys the spec dropped. As of the 2026-10-15
+  check the complete expected residue is (plus `Company.mx`, in the next bullet):
+  - `Person.location` — spec: `city`, `continent`, `country_code`, `postal_code`,
+    `state_code`, `street_address`. **No extras.**
+  - `Experience.job_location` — spec: `city`, `country_code`, `state_code`. SDK-only:
+    `continent`, `postal_code`, `street_address`.
+  - `Job.location` (`jobs.search`/`jobs.company`) — spec: `city`, `country_code`. SDK-only:
+    `continent`, `postal_code`, `state_code`, `street_address`.
+  - `Company.hq` — spec: `city`, `continent`, `country_code`, `country_name`, `region`,
+    `state`. SDK-only: `postcode`, `street` (see the `HQ` bullet below for why).
+
+  Why a superset and not per-site models: every field is `.nullish()` on a `blitzObject`, so a
+  narrower payload parses unchanged and the extras just read `undefined`; per-site duplicates
+  would split one shared type for no gain, and narrowing `Location` would be a type-level
+  break for callers who read it off any of the three. **How to apply:** an SDK-only field
+  *outside this list* is drift — that is how `Company.slogan`/`revenue`/`employee_growth` were
+  caught (2026-09-22) — so keep the list current rather than waving a diff through. (A naive
+  path-flattener also misreports `Company.specialties`, whose `anyOf[anyOf[array, null], null]`
+  double wrapper hides the array; that one is a tooling artefact, not a model difference.)
+- **`mx` (MX records) keeps its `null`: it is the one list field that does not go through
+  `blitzList`.** `Company.mx` (`enrichment.company`), `EmailEnrichmentResponse.mx` and
+  `EmailMatch.mx` (`enrichment.email`) are declared once as the shared `MxRecords`, because
+  `null` and `[]` mean different things: `null` is "no MX data" (the domain is not resolved
+  yet), `[]` is "the domain takes no mail". Coercing `null` to `[]` would make a caller read
+  "no data" as "takes no mail". This differs from the `specialties` exemption reversed on
+  2026-09-22, where the spec showed no semantic difference between the two; here the API
+  documents one, in both the changelog and the spec. Pinned by a test, and a second assertion
+  keeps every other list coercing. `Company.mx` is on the shared `Company` (superset rule, not
+  a per-endpoint copy) but only `enrichment.company` returns it, so a spec diff reports it as
+  SDK-only on `search.companies`, `tam_by_jobs` and `tam_by_people` results — expected.
 - **`Education` has no `field_of_study`.** The API removed it on 2026-09-15 and folded the
   field of study into `degree` (`"Bachelor of Science, Industrial Engineering"`). Guarded by
   a schema-shape assertion in `models.test.ts` — `blitzObject` would otherwise happily
@@ -296,6 +330,13 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
 - **`Experience.job_contract_type`/`job_work_arrangement` stay loose strings**, not the
   request-side `EmploymentType`/`WorkArrangement` enums — those enums exist only on the
   request side of the *jobs* endpoints, and the person payload's values are free-form.
+- **`is_recent_hire` and the job-history flags sit in a different place on each route**,
+  modelled as the `RecentHireFlag`/`JobHistoryFlags` mixins: inside the `people` object on
+  `search.people` (both) and `company.tam_by_people` (`is_recent_hire` only — it matches
+  current employees); inside each `cascade` tier on `search.waterfall_icp`; top-level on
+  `search.employee_finder` and both `enrichment.company_distribution_by_*`. The runtime spec
+  lagged the API owner on this twice and caught up on 2026-10-15 (request-side diff empty
+  again) — see the three 2026-10-15 decision-log entries for the history.
 - **`Job.date_posted` stays a string.** The API emits a non-ISO-8601 timestamp
   (`"2026-07-08 23:00:07+02"` — space separator, offset, no `T`), so it is never
   coerced to a `Date`.
@@ -362,6 +403,128 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-10-15 (third pass)** — Re-pulled the runtime spec and changelog after the owner's
+  move. **(1) The placement is published and the request-side diff is empty again:**
+  `people.is_recent_hire` on `search.people` and `tam_by_people`, `people.include_*_jobs` on
+  `search.people`, and all three on each `cascade` item (the 2026-10-14/15 changelog entries
+  were rewritten in place, so their dates did not move). A `CascadeTier` now equals the
+  spec's seven keys exactly, which also settles the per-tier reading below. **(2) `mx` is new
+  in the responses, in three places, only one announced:** `Company.mx` on
+  `enrichment.company` (changelog 2026-10-15) and `EmailEnrichmentResponse.mx` plus
+  `EmailMatch.mx` on `enrichment.email` — **not in any changelog entry**; only a spec diff
+  showed it (marked required, "by priority, at most 10, null when not resolved"). Shape:
+  `MxRecord { priority, host }` and the shared `MxRecords`. **(3) `mx` is the first exception
+  to the "every list goes through `blitzList`" rule** (§7 has the reasoning: `null` and `[]`
+  are documented as different states). CLAUDE.md still says there is no exemption, so its
+  wording needs amending if the exception stands. **(4) Residue:** `Company.mx` joins the
+  expected spec-vs-SDK differences (§7). A kind-level diff (string/number/boolean/array per
+  field, both directions) found no mismatch; its one flag, `employee_finder.max_results`, is
+  the checker failing to read a field inherited through `Omit<>`, confirmed against the
+  compiler. Not mirrored in `blitz-api-py`, which needs both the flag move and `mx`. No live
+  API call was made.
+
+- **2026-10-15 (later)** — **Moved the three flags again, at the API owner's direction and
+  ahead of the spec.** `is_recent_hire`, `include_active_jobs` and `include_past_jobs` now sit
+  **inside the `people` object** on `search.people` and **inside each `cascade` tier** on
+  `search.waterfall_icp`; `company.tam_by_people` takes `people.is_recent_hire` (it never had
+  the job-history flags); `search.employee_finder` and both `company_distribution_by_*` keep
+  top-level `is_recent_hire` (no object to nest it in, and the owner named only the first two
+  routes). This is the second flip of the same fields (nested → top-level → nested), so the
+  entry below is superseded for those three routes. *Expected a diff — resolved by the entry above, kept for the history:* the runtime spec and the
+  changelog still published the top-level placement when this landed (re-pulled, unchanged), so a
+  request-side diff reports spec-only top-level `is_recent_hire`/`include_active_jobs`/
+  `include_past_jobs` on `/v2/search/people` and `/v2/search/waterfall-icp-keyword` (and
+  `is_recent_hire` on `tam-by-people`) against SDK-only `people.*` (and `cascade[].*` for a
+  diff that descends into array items; the checker used here does not). That is the
+  owner leading the spec, not drift; re-diff before merging and once upstream republishes it
+  should be empty. **Reading, not stated outright:** "moved into the cascade" is taken as
+  *per tier*, since a cascade is an array and a tier is the only place a field can live — so
+  each tier now chooses its own recency and job-history window, where the top-level form was one
+  setting for the whole cascade. **Types:** `RecentHireParams`/`JobHistoryParams` became
+  `RecentHireFlag`/`JobHistoryFlags` (mixins into filter objects now, not top-level params;
+  unreleased, so the rename is free). `PeopleFilter extends RecentHireFlag` covers both people
+  routes; a new `PeopleSearchFilter extends PeopleFilter, JobHistoryFlags` keeps the job-history
+  flags off `tam_by_people` (the accepted-then-ignored rule, same as `TamPeopleFilter`);
+  `CascadeTier extends RecentHireFlag, JobHistoryFlags`. The compile-time guards flipped (the
+  top-level form is now the `@ts-expect-error`), and the positive tests annotate their bodies
+  with the params type: a bare `const body = {…}` passed by variable skips TypeScript's
+  excess-property check and kept passing when a mutation removed the fields from the types.
+  Not yet mirrored in `blitz-api-py`, whose branch still has them top-level.
+
+- **2026-10-15** — Synced the 2026-09-28 and 2026-10-14 API releases (the changelog is now
+  39 entries; the last sync, 2026-09-22, predates both). A two-way diff of the SDK against
+  the runtime spec — request interfaces flattened through the TypeScript checker, response
+  models through their Zod shapes — found exactly the additions below and nothing else; the
+  response side differs only by the deliberate `Location`/`HQ` supersets (listed in §7).
+  **(1) `is_recent_hire` is a top-level request field on all six routes that take it** —
+  `search.people`, `company.tam_by_people`, `search.employee_finder`, `search.waterfall_icp`
+  and both `enrichment.company_distribution_by_*` — modelled once as `RecentHireFlag`.
+  *(Superseded for `search.people`, `tam_by_people` and the waterfall by the entry above;
+  still true for `employee_finder` and the two distribution methods.)* *History:* on the first two, the runtime spec and the 2026-10-14 changelog entry first put
+  it at `people.is_recent_hire`; the API owner moved it to the top level (beside
+  `max_results`, like the other four) and the SDK followed the owner ahead of the spec. The
+  same day (re-pulled 2026-10-15) upstream republished both the spec and that changelog entry
+  ("the same top-level flag"), and the request-side diff went to empty — so there is no
+  standing mismatch to explain. Nesting it under
+  `people` is a compile error, pinned with `@ts-expect-error` in `test/resources.test.ts`:
+  since 2026-09-28 an unknown field at any depth is a `422`, not ignored, so a wrong
+  placement breaks the call rather than being dropped. The `blitz-api-py` branch
+  (`sdk-is_recent_hire-update`) landed the same wire shape independently.
+  **(2) Past-job search**: `include_active_jobs`/`include_past_jobs` (`JobHistoryFlags`) on
+  `search.people` and `search.waterfall_icp` only — not `tam_by_people`, which matches current
+  employees. Unset flags are omitted so the server defaults (`true`/`false`) apply; both
+  `false` is a `422`, documented not pre-validated (the 50-entry-cap posture). The matched job
+  comes back in `experiences[]` with `job_is_current`, which `Experience` already had, so only
+  its doc comment changed; `experiences[]` on `search.people` is still the matched position
+  (see the 2026-09-22 entry), which may now be a past one.
+  **(3) `company.mx.provider`** (`MxFilter`/`MxProviderFilter` on the shared `CompanyFilter`,
+  so `search.companies`, `search.people` and `company.tam_by_people`; not the jobs-side
+  `JobCompanyFilter`, which the spec doesn't declare it on). The 66-value provider list is a
+  new generated enum, `MxProvider`: `gen-enums.ts` maps it by the bare owning property
+  `provider`, the only `provider` key in the spec — a second one with a different list would
+  trip the divergence check. `"any"` is a sentinel (every provider: in `include` it keeps
+  companies with MX data, in `exclude` those with none), not a provider, documented on
+  `MxProviderFilter` the way `"Unknown"` is on `IndustryFilter`. The runtime spec's `mx`
+  description adds that `exclude` never drops no-MX companies "unless you use `any`", which
+  contradicts its own `provider` description (`exclude: ["any"]` *keeps* them); the SDK doc
+  follows the `provider` text and its worked example, and says `exclude` never drops them.
+  Worth confirming with the API owner — it was not observed against the live API.
+  **(4) `people.education.start_year`/`end_year`**: `PeopleEducationFilter extends
+  KeywordFilter`, years typed `RangeFilter` rather than a new integer-only shape — the spec
+  says integer 0–2100 with `0` unset, which `RangeFilter` already documents. They apply to the
+  same education entry as `include`.
+  **(5) `CompanyDistributionParams`.** The two distribution methods shared
+  `CompanyLinkedinUrlParams` with `enrichment.company`/`linkedin_to_domain`, so the flag went
+  on a new `CompanyDistributionParams extends CompanyLinkedinUrlParams, RecentHireFlag`
+  instead of widening the shared type — the CLAUDE.md accepted-then-ignored rule, now
+  stricter because the other two methods would `422` on it.
+  **(6) Response**: `found` on both distribution responses (changelog 2026-09-28; `false` and
+  zero records when the company is unknown or has no current employees), `.nullish()` like
+  every other `found` although the spec marks it required, and pinned by a schema-shape
+  assertion because `blitzObject` would let a value-only test pass without it. The country
+  endpoint's `count`/`total_employees` now count people, not jobs (2026-10-14) — docs only.
+  **(7) `[brackets]` exact match** (changelog 2026-10-15, documented in the runtime spec):
+  `job.title` on `jobs.search`/`jobs.company`/`company.tam_by_jobs`, and `company.hq.city`/
+  `state` on `jobs.search`/`company.tam_by_jobs`. Behaviour only — still `string[]` in a
+  `KeywordFilter` — so this is doc comments on `JobFilter.title` and `JobCompanyHQFilter`, not
+  a type change; the shared `KeywordFilter` is deliberately *not* annotated, since
+  `job.description`/`ai_keywords`/`field` and the people-side HQ filters do not take it. The
+  waterfall `include_title`/`exclude_title` already supported it (the spec says so); that
+  too was undocumented in the SDK and is now noted on `CascadeTier`.
+  **Nothing to change** for the rest of the 09-28 batch: `make_status_error` already reads the
+  new 422's top-level `message` (now pinned by a test), the 400-on-invalid-JSON is unreachable
+  from a client that always sends JSON, and the cost change is billing-side. §2 was corrected.
+  **Deliberately left alone, unresolved upstream:** `tam_by_jobs` `max_results` defaults to 10
+  in the runtime spec and 3 in the docs mirror (the docs value was set on purpose on
+  2026-08-12; no changelog entry covers either), and the SDK already documents 10 — which
+  side is stale needs a live call. The runtime spec's `last_funding_amount`/`total_funding`
+  max (10¹²) is still looser than the docs mirror's (2,147,483,647); `last_funding_year`
+  was too (0–10⁹) until upstream tightened it to `0 = unset, otherwise 1800 to 2026` on
+  2026-10-15, matching the docs. `RangeFilter` enforces none of them, so nothing moves. `cursor` `minLength: 3` (jobs) and
+  `cascade[].location[]` `minLength: 2` are documented (the latter on `CascadeTier.location`),
+  not enforced, per the list-caps rule. Verified against the specs and changelog only — no
+  live API call was made, so the new filters' runtime behaviour is as documented, not observed.
 
 - **2026-09-22** — **`experiences[]` on `search.people` carries the matched position
   only — treat it as a single entry.** Resolved by the API owner after #27 challenged it;
