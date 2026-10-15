@@ -319,11 +319,13 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
 - **`Experience.job_contract_type`/`job_work_arrangement` stay loose strings**, not the
   request-side `EmploymentType`/`WorkArrangement` enums — those enums exist only on the
   request side of the *jobs* endpoints, and the person payload's values are free-form.
-- **`is_recent_hire` is a top-level request field on all six routes that take it**
-  (`search.people`, `company.tam_by_people`, `search.employee_finder`,
-  `search.waterfall_icp`, both `enrichment.company_distribution_by_*`), modelled once as
-  `RecentHireParams` — never a key of `PeopleFilter`/`TamPeopleFilter`. The runtime spec
-  agrees since 2026-10-15; see that decision-log entry for how it got there.
+- **`is_recent_hire` and the job-history flags sit in a different place on each route**,
+  modelled as the `RecentHireFlag`/`JobHistoryFlags` mixins: inside the `people` object on
+  `search.people` (both) and `company.tam_by_people` (`is_recent_hire` only — it matches
+  current employees); inside each `cascade` tier on `search.waterfall_icp`; top-level on
+  `search.employee_finder` and both `enrichment.company_distribution_by_*`. The runtime spec
+  has lagged the API owner on this twice — read the two 2026-10-15 decision-log entries
+  before "fixing" it against the spec.
 - **`Job.date_posted` stays a string.** The API emits a non-ISO-8601 timestamp
   (`"2026-07-08 23:00:07+02"` — space separator, offset, no `T`), so it is never
   coerced to a `Date`.
@@ -391,6 +393,34 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-10-15 (later)** — **Moved the three flags again, at the API owner's direction and
+  ahead of the spec.** `is_recent_hire`, `include_active_jobs` and `include_past_jobs` now sit
+  **inside the `people` object** on `search.people` and **inside each `cascade` tier** on
+  `search.waterfall_icp`; `company.tam_by_people` takes `people.is_recent_hire` (it never had
+  the job-history flags); `search.employee_finder` and both `company_distribution_by_*` keep
+  top-level `is_recent_hire` (no object to nest it in, and the owner named only the first two
+  routes). This is the second flip of the same fields (nested → top-level → nested), so the
+  entry below is superseded for those three routes. *Expect a diff:* the runtime spec and the
+  changelog still published the top-level placement when this landed (re-pulled, unchanged), so a
+  request-side diff reports spec-only top-level `is_recent_hire`/`include_active_jobs`/
+  `include_past_jobs` on `/v2/search/people` and `/v2/search/waterfall-icp-keyword` (and
+  `is_recent_hire` on `tam-by-people`) against SDK-only `people.*` (and `cascade[].*` for a
+  diff that descends into array items; the checker used here does not). That is the
+  owner leading the spec, not drift; re-diff before merging and once upstream republishes it
+  should be empty. **Reading, not stated outright:** "moved into the cascade" is taken as
+  *per tier*, since a cascade is an array and a tier is the only place a field can live — so
+  each tier now chooses its own recency and job-history window, where the top-level form was one
+  setting for the whole cascade. **Types:** `RecentHireParams`/`JobHistoryParams` became
+  `RecentHireFlag`/`JobHistoryFlags` (mixins into filter objects now, not top-level params;
+  unreleased, so the rename is free). `PeopleFilter extends RecentHireFlag` covers both people
+  routes; a new `PeopleSearchFilter extends PeopleFilter, JobHistoryFlags` keeps the job-history
+  flags off `tam_by_people` (the accepted-then-ignored rule, same as `TamPeopleFilter`);
+  `CascadeTier extends RecentHireFlag, JobHistoryFlags`. The compile-time guards flipped (the
+  top-level form is now the `@ts-expect-error`), and the positive tests annotate their bodies
+  with the params type: a bare `const body = {…}` passed by variable skips TypeScript's
+  excess-property check and kept passing when a mutation removed the fields from the types.
+  Not yet mirrored in `blitz-api-py`, whose branch still has them top-level.
+
 - **2026-10-15** — Synced the 2026-09-28 and 2026-10-14 API releases (the changelog is now
   39 entries; the last sync, 2026-09-22, predates both). A two-way diff of the SDK against
   the runtime spec — request interfaces flattened through the TypeScript checker, response
@@ -398,8 +428,9 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   response side differs only by the deliberate `Location`/`HQ` supersets (listed in §7).
   **(1) `is_recent_hire` is a top-level request field on all six routes that take it** —
   `search.people`, `company.tam_by_people`, `search.employee_finder`, `search.waterfall_icp`
-  and both `enrichment.company_distribution_by_*` — modelled once as `RecentHireParams`.
-  *History:* on the first two, the runtime spec and the 2026-10-14 changelog entry first put
+  and both `enrichment.company_distribution_by_*` — modelled once as `RecentHireFlag`.
+  *(Superseded for `search.people`, `tam_by_people` and the waterfall by the entry above;
+  still true for `employee_finder` and the two distribution methods.)* *History:* on the first two, the runtime spec and the 2026-10-14 changelog entry first put
   it at `people.is_recent_hire`; the API owner moved it to the top level (beside
   `max_results`, like the other four) and the SDK followed the owner ahead of the spec. The
   same day (re-pulled 2026-10-15) upstream republished both the spec and that changelog entry
@@ -409,7 +440,7 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   since 2026-09-28 an unknown field at any depth is a `422`, not ignored, so a wrong
   placement breaks the call rather than being dropped. The `blitz-api-py` branch
   (`sdk-is_recent_hire-update`) landed the same wire shape independently.
-  **(2) Past-job search**: `include_active_jobs`/`include_past_jobs` (`JobHistoryParams`) on
+  **(2) Past-job search**: `include_active_jobs`/`include_past_jobs` (`JobHistoryFlags`) on
   `search.people` and `search.waterfall_icp` only — not `tam_by_people`, which matches current
   employees. Unset flags are omitted so the server defaults (`true`/`false`) apply; both
   `false` is a `422`, documented not pre-validated (the 50-entry-cap posture). The matched job
@@ -434,7 +465,7 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   same education entry as `include`.
   **(5) `CompanyDistributionParams`.** The two distribution methods shared
   `CompanyLinkedinUrlParams` with `enrichment.company`/`linkedin_to_domain`, so the flag went
-  on a new `CompanyDistributionParams extends CompanyLinkedinUrlParams, RecentHireParams`
+  on a new `CompanyDistributionParams extends CompanyLinkedinUrlParams, RecentHireFlag`
   instead of widening the shared type — the CLAUDE.md accepted-then-ignored rule, now
   stricter because the other two methods would `422` on it.
   **(6) Response**: `found` on both distribution responses (changelog 2026-09-28; `false` and

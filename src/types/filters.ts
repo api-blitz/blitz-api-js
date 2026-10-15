@@ -207,6 +207,50 @@ export interface PeopleEducationFilter extends KeywordFilter {
 }
 
 /**
+ * The `is_recent_hire` flag. Where it sits in the request body depends on the endpoint:
+ * inside the `people` object on `search.people` and `company.tam_by_people` ({@link
+ * PeopleFilter}), inside each `cascade` tier on `search.waterfall_icp` ({@link
+ * CascadeTier}), and top-level on `search.employee_finder` and both
+ * `enrichment.company_distribution_by_*` methods. The types place it accordingly and
+ * nowhere else — a field in the wrong place is a `422`, not ignored.
+ */
+export interface RecentHireFlag {
+  /**
+   * Keep only people whose job started in the **last 90 days** (default `false`). A job
+   * with no start date never matches.
+   *
+   * Which job is checked depends on the endpoint:
+   * - `search.people`, `company.tam_by_people`: a job that also matches your other job
+   *   and company filters. On `search.people` that covers the jobs
+   *   {@link JobHistoryFlags} selects (current jobs by default).
+   * - `search.waterfall_icp`: within this tier, a job at the company that also matches
+   *   the tier's title filters — again among the jobs {@link JobHistoryFlags} selects.
+   * - `search.employee_finder`: the person's current job at the company, which must also
+   *   match `job_level` and `job_function`.
+   * - `enrichment.company_distribution_by_*`: only people whose current job at the
+   *   company started in the window are counted.
+   */
+  is_recent_hire?: boolean;
+}
+
+/**
+ * Which of a person's jobs `search.people` (inside `people`) and `search.waterfall_icp`
+ * (inside each `cascade` tier) match against.
+ *
+ * Your job and company filters (and, on the waterfall, the tier's title filters) must
+ * all hold in the **same** job. The matched job comes back in `experiences[]`, with
+ * `job_is_current` saying whether it is a current one. A person is returned once; if
+ * both a current and a past job match, the current one is preferred. Setting both flags
+ * to `false` is rejected with a `422`.
+ */
+export interface JobHistoryFlags {
+  /** Search each person's current jobs. Defaults to `true`. */
+  include_active_jobs?: boolean;
+  /** Also search each person's past jobs. Defaults to `false`. */
+  include_past_jobs?: boolean;
+}
+
+/**
  * People search criteria, shared by `search.people` and
  * `company.tam_by_people`.
  *
@@ -215,10 +259,10 @@ export interface PeopleEducationFilter extends KeywordFilter {
  * filter), and it survives only on `company.tam_by_people` — see
  * {@link TamPeopleFilter}.
  *
- * `is_recent_hire` is **not** here either: it is a top-level request field, not a
- * `people` one — see {@link RecentHireParams}.
+ * `include_active_jobs`/`include_past_jobs` are **not** here either: only
+ * `search.people` takes them — see {@link PeopleSearchFilter}.
  */
-export interface PeopleFilter {
+export interface PeopleFilter extends RecentHireFlag {
   job_title?: PeopleJobTitleFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
@@ -227,8 +271,19 @@ export interface PeopleFilter {
   education?: PeopleEducationFilter;
 }
 
-/** One tier of a waterfall ICP cascade, tried in order until results are found. */
-export interface CascadeTier {
+/**
+ * People criteria for `search.people` — the same shape as {@link PeopleFilter} plus the
+ * {@link JobHistoryFlags}. Extending (rather than widening `PeopleFilter`) keeps them off
+ * `company.tam_by_people`, which matches current employees only and rejects the fields
+ * — the same split as {@link TamPeopleFilter}.
+ */
+export interface PeopleSearchFilter extends PeopleFilter, JobHistoryFlags {}
+
+/**
+ * One tier of a waterfall ICP cascade, tried in order until results are found. Each tier
+ * carries its own {@link RecentHireFlag} and {@link JobHistoryFlags}.
+ */
+export interface CascadeTier extends RecentHireFlag, JobHistoryFlags {
   /**
    * Phrases matched against the job title (up to 50). Wrap a phrase in `[brackets]`
    * (`"[CEO]"`) for an exact match, ignoring case and accents; otherwise it is a
@@ -393,54 +448,9 @@ export interface OffsetPaginatedParams extends Omit<CursorPaginatedParams, "curs
   page?: number;
 }
 
-/**
- * The `is_recent_hire` flag — a **top-level** request field on `search.people`,
- * `company.tam_by_people`, `search.employee_finder`, `search.waterfall_icp`,
- * `enrichment.company_distribution_by_country` and
- * `enrichment.company_distribution_by_department`. It is never nested under `people`.
- */
-export interface RecentHireParams {
-  /**
-   * Keep only people whose job started in the **last 90 days** (default `false`). A job
-   * with no start date never matches.
-   *
-   * Which job is checked depends on the endpoint:
-   * - `search.people`, `company.tam_by_people`: a job that also matches your other job
-   *   and company filters. On `search.people` that covers the jobs
-   *   {@link JobHistoryParams} selects (current jobs by default).
-   * - `search.waterfall_icp`: in every cascade tier, a job at the company that also
-   *   matches the tier's title filters — again among the jobs {@link JobHistoryParams}
-   *   selects.
-   * - `search.employee_finder`: the person's current job at the company, which must also
-   *   match `job_level` and `job_function`.
-   * - `enrichment.company_distribution_by_*`: only people whose current job at the
-   *   company started in the window are counted.
-   */
-  is_recent_hire?: boolean;
-}
-
-/**
- * Which of a person's jobs `search.people` and `search.waterfall_icp` match against.
- *
- * Your job and company filters (and, on the waterfall, a tier's title filters) must
- * all hold in the **same** job. The matched job comes back in `experiences[]`, with
- * `job_is_current` saying whether it is a current one. A person is returned once; if
- * both a current and a past job match, the current one is preferred. Setting both flags
- * to `false` is rejected with a `422`.
- */
-export interface JobHistoryParams {
-  /** Search each person's current jobs. Defaults to `true`. */
-  include_active_jobs?: boolean;
-  /** Also search each person's past jobs. Defaults to `false`. */
-  include_past_jobs?: boolean;
-}
-
-export interface PeopleSearchParams
-  extends CursorPaginatedParams,
-    RecentHireParams,
-    JobHistoryParams {
+export interface PeopleSearchParams extends CursorPaginatedParams {
   company?: PeopleCompanyFilter;
-  people?: PeopleFilter;
+  people?: PeopleSearchFilter;
 }
 
 export interface CompanySearchParams extends CursorPaginatedParams {
@@ -475,19 +485,19 @@ export interface TamByJobsParams extends CursorPaginatedParams {
  * Params for `company.tam_by_people` — build a Total Addressable Market of
  * companies from the people who already work there (each result is a company
  * plus how many of its current employees matched). Takes the same filters as
- * `search.people`, except the {@link JobHistoryParams} flags — it matches current
+ * `search.people`, except the {@link JobHistoryFlags} — it matches current
  * employees only. Cursor-paginated. The API bills **1 record per result
  * returned** (up to `max_results`). Can raise `AuthenticationError` (401),
  * `InsufficientRecordsError` (402), `RateLimitError` (429), or `ServerError` (5xx).
  */
-export interface TamByPeopleParams extends CursorPaginatedParams, RecentHireParams {
+export interface TamByPeopleParams extends CursorPaginatedParams {
   /** Company firmographics — the same block as `search.people` ({@link PeopleCompanyFilter}). */
   company?: PeopleCompanyFilter;
   /** People filters plus `linkedin_url`/`min_per_company` (see {@link TamPeopleFilter}). */
   people?: TamPeopleFilter;
 }
 
-export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireParams {
+export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireFlag {
   company_linkedin_url: string;
   country_code?: string[];
   continent?: ContinentValue[];
@@ -497,7 +507,7 @@ export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireP
   min_connections_count?: number;
 }
 
-export interface WaterfallIcpParams extends RecentHireParams, JobHistoryParams {
+export interface WaterfallIcpParams {
   company_linkedin_url: string;
   /** Tiers tried in priority order. Capped at **10** steps server side. */
   cascade: CascadeTier[];
@@ -524,7 +534,7 @@ export interface CompanyLinkedinUrlParams {
  * off `enrichment.company` and `enrichment.linkedin_to_domain`, which reject
  * an unknown field with a `422`.
  */
-export interface CompanyDistributionParams extends CompanyLinkedinUrlParams, RecentHireParams {}
+export interface CompanyDistributionParams extends CompanyLinkedinUrlParams, RecentHireFlag {}
 
 export interface EmailToPersonParams {
   email: string;

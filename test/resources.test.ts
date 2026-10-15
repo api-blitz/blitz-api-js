@@ -8,6 +8,7 @@ import type {
   EmployeeFinderParams,
   PeopleSearchParams,
   TamByPeopleParams,
+  WaterfallIcpParams,
 } from "../src/index.js";
 import {
   APITimeoutError,
@@ -524,14 +525,14 @@ describe("2026-10-14 request fields", () => {
     return () => body;
   }
 
-  it("search.people sends is_recent_hire at the top level, never under people", async () => {
+  it("search.people sends is_recent_hire and the job-history flags inside people", async () => {
     const sent = capture("/v2/search/people", data.PEOPLE_SEARCH);
-    await client().search.people({
-      is_recent_hire: true,
-      include_active_jobs: false,
-      include_past_jobs: true,
+    const body: PeopleSearchParams = {
       company: { mx: { provider: { include: ["google"], exclude: ["zoho"] } } },
       people: {
+        is_recent_hire: true,
+        include_active_jobs: false,
+        include_past_jobs: true,
         education: {
           include: ["Stanford"],
           start_year: { min: 2010, max: 2015 },
@@ -539,39 +540,29 @@ describe("2026-10-14 request fields", () => {
         },
       },
       max_results: 1,
-    });
-    expect(sent()).toEqual({
-      is_recent_hire: true,
-      include_active_jobs: false,
-      include_past_jobs: true,
-      company: { mx: { provider: { include: ["google"], exclude: ["zoho"] } } },
-      people: {
-        education: {
-          include: ["Stanford"],
-          start_year: { min: 2010, max: 2015 },
-          end_year: { min: 2014 },
-        },
-      },
-      max_results: 1,
-    });
-    expect(sent()).not.toHaveProperty("people.is_recent_hire");
+    };
+    await client().search.people(body);
+    expect(sent()).toEqual(body);
+    // Nothing leaks to the top level: there it would be an unknown field, hence a 422.
+    for (const key of ["is_recent_hire", "include_active_jobs", "include_past_jobs"]) {
+      expect(sent()).not.toHaveProperty(key);
+    }
   });
 
-  it("company.tam_by_people sends is_recent_hire at the top level, plus mx and education years", async () => {
+  it("company.tam_by_people sends is_recent_hire inside people, plus mx and education years", async () => {
     const sent = capture("/v2/company/tam-by-people", data.TAM_BY_PEOPLE);
-    await client().company.tam_by_people({
-      is_recent_hire: true,
+    const body: TamByPeopleParams = {
       company: { mx: { provider: { include: ["any"], exclude: ["google"] } } },
-      people: { education: { end_year: { min: 2020, max: 2024 } }, min_per_company: 2 },
+      people: {
+        is_recent_hire: true,
+        education: { end_year: { min: 2020, max: 2024 } },
+        min_per_company: 2,
+      },
       max_results: 1,
-    });
-    expect(sent()).toEqual({
-      is_recent_hire: true,
-      company: { mx: { provider: { include: ["any"], exclude: ["google"] } } },
-      people: { education: { end_year: { min: 2020, max: 2024 } }, min_per_company: 2 },
-      max_results: 1,
-    });
-    expect(sent()).not.toHaveProperty("people.is_recent_hire");
+    };
+    await client().company.tam_by_people(body);
+    expect(sent()).toEqual(body);
+    expect(sent()).not.toHaveProperty("is_recent_hire");
   });
 
   it("search.companies sends the mx provider filter", async () => {
@@ -608,22 +599,22 @@ describe("2026-10-14 request fields", () => {
     });
   });
 
-  it("search.waterfall_icp sends is_recent_hire and the job-history flags", async () => {
+  it("search.waterfall_icp sends is_recent_hire and the job-history flags per cascade tier", async () => {
     const sent = capture("/v2/search/waterfall-icp-keyword", data.WATERFALL_ICP);
-    await client().search.waterfall_icp({
+    // Two tiers with different settings: the flags belong to a tier, not to the request.
+    const body: WaterfallIcpParams = {
       company_linkedin_url: COMPANY_URL,
-      cascade: [{ include_title: ["CEO"], location: ["US"] }],
-      is_recent_hire: true,
-      include_active_jobs: true,
-      include_past_jobs: true,
-    });
-    expect(sent()).toEqual({
-      company_linkedin_url: COMPANY_URL,
-      cascade: [{ include_title: ["CEO"], location: ["US"] }],
-      is_recent_hire: true,
-      include_active_jobs: true,
-      include_past_jobs: true,
-    });
+      cascade: [
+        { include_title: ["CEO"], is_recent_hire: true, include_past_jobs: true },
+        { include_title: ["CTO"], include_active_jobs: false, include_past_jobs: true },
+        { include_title: ["COO"] },
+      ],
+    };
+    await client().search.waterfall_icp(body);
+    expect(sent()).toEqual(body);
+    for (const key of ["is_recent_hire", "include_active_jobs", "include_past_jobs"]) {
+      expect(sent()).not.toHaveProperty(key);
+    }
   });
 
   it.each([
@@ -651,22 +642,37 @@ describe("2026-10-14 request fields", () => {
   });
 
   it("makes a field the endpoint would reject a compile error", () => {
-    // The API answers an unknown field with a 422 (since 2026-09-28), and a nested
-    // `people.is_recent_hire` is one — so the params types must refuse each of these.
-    // `pnpm typecheck` is what enforces it (an unused `@ts-expect-error` fails there);
+    // The API answers an unknown field with a 422 (since 2026-09-28), so a flag in the
+    // wrong place is a failed call, not an ignored one — the params types must refuse it.
+    // `pnpm typecheck` is what enforces this (an unused `@ts-expect-error` fails there);
     // these are bare assignments, so nothing is sent.
     const url = { company_linkedin_url: COMPANY_URL };
-    // @ts-expect-error `is_recent_hire` is a top-level field, not a `people` one
-    const nested: PeopleSearchParams = { people: { is_recent_hire: true } };
+    const tier = { include_title: ["CEO"] };
+    // @ts-expect-error `search.people` takes `is_recent_hire` inside `people`, not top-level
+    const people: PeopleSearchParams = { is_recent_hire: true };
+    // @ts-expect-error `company.tam_by_people` takes it inside `people` too
+    const tam: TamByPeopleParams = { is_recent_hire: true };
+    // @ts-expect-error `company.tam_by_people` matches current employees: no job-history flags
+    const tamJobs: TamByPeopleParams = { people: { include_past_jobs: true } };
+    // @ts-expect-error `search.waterfall_icp` takes the flags per cascade tier, not top-level
+    const waterfall: WaterfallIcpParams = { ...url, cascade: [tier], is_recent_hire: true };
+    // @ts-expect-error `search.waterfall_icp` takes the job-history flags per tier as well
+    const waterfallJobs: WaterfallIcpParams = { ...url, cascade: [tier], include_past_jobs: true };
     // @ts-expect-error `enrichment.company` has no `is_recent_hire`
     const company: CompanyLinkedinUrlParams = { ...url, is_recent_hire: true };
     // @ts-expect-error `search.companies` has no `is_recent_hire`
     const companies: CompanySearchParams = { is_recent_hire: true };
     // @ts-expect-error `search.employee_finder` has no job-history flags
     const finder: EmployeeFinderParams = { ...url, include_past_jobs: true };
-    // `company.tam_by_people` matches current employees only, so it has no job-history flags.
-    // @ts-expect-error `include_past_jobs` is not a `company.tam_by_people` field
-    const tam: TamByPeopleParams = { include_past_jobs: true };
-    expect([nested, company, companies, finder, tam]).toHaveLength(5);
+    expect([
+      people,
+      tam,
+      tamJobs,
+      waterfall,
+      waterfallJobs,
+      company,
+      companies,
+      finder,
+    ]).toHaveLength(8);
   });
 });
