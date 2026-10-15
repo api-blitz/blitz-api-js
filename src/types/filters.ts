@@ -87,8 +87,8 @@ export interface LastFundingTypeFilter {
  *
  * `"any"` stands for every provider: in `include` it keeps companies that have MX
  * data, in `exclude` it keeps companies that have none. A company with no MX data is
- * never matched by `include`, and `exclude` never drops it unless you use `"any"` —
- * so `{ include: ["any"], exclude: ["google"] }` means companies with MX data that do
+ * never matched by `include`, and `exclude` never drops it. For example,
+ * `{ include: ["any"], exclude: ["google"] }` means companies with MX data that do
  * not use Google.
  */
 export interface MxProviderFilter {

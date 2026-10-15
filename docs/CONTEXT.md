@@ -423,7 +423,11 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   `provider`, the only `provider` key in the spec — a second one with a different list would
   trip the divergence check. `"any"` is a sentinel (every provider: in `include` it keeps
   companies with MX data, in `exclude` those with none), not a provider, documented on
-  `MxProviderFilter` the way `"Unknown"` is on `IndustryFilter`.
+  `MxProviderFilter` the way `"Unknown"` is on `IndustryFilter`. The runtime spec's `mx`
+  description adds that `exclude` never drops no-MX companies "unless you use `any`", which
+  contradicts its own `provider` description (`exclude: ["any"]` *keeps* them); the SDK doc
+  follows the `provider` text and its worked example, and says `exclude` never drops them.
+  Worth confirming with the API owner — it was not observed against the live API.
   **(4) `people.education.start_year`/`end_year`**: `PeopleEducationFilter extends
   KeywordFilter`, years typed `RangeFilter` rather than a new integer-only shape — the spec
   says integer 0–2100 with `0` unset, which `RangeFilter` already documents. They apply to the
