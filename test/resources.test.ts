@@ -68,6 +68,8 @@ describe("resources", () => {
     });
     expect(result).toBeInstanceOf(Object);
     expect(result.email).toBe("antoine@blitz-agency.com");
+    expect(result.mx).toEqual(data.MX_RECORDS);
+    expect(result.all_emails[0]?.mx).toEqual(data.MX_RECORDS);
     expect(EmailEnrichmentResponse.parse(result)).toEqual(result);
     expect(body).toEqual({ person_linkedin_url: "https://www.linkedin.com/in/example" });
   });
@@ -81,6 +83,7 @@ describe("resources", () => {
     });
     expect(CompanyEnrichmentResponse.parse(result)).toBeTruthy();
     expect(result.company?.name).toBe("Google");
+    expect(result.company?.mx).toEqual(data.MX_RECORDS);
   });
 
   it("search.people sends values and drops undefined params", async () => {

@@ -5,6 +5,7 @@ import * as z from "zod";
 import * as api from "../src/index.js";
 import {
   ChangelogResponse,
+  Company,
   CompanyDistributionByCountryResponse,
   CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
@@ -14,11 +15,13 @@ import {
   DomainToLinkedinResponse,
   Education,
   EmailEnrichmentResponse,
+  EmailMatch,
   EmailToPersonResponse,
   EmployeeFinderResponse,
   JobSearchResponse,
   KeyInfo,
   LinkedinToDomainResponse,
+  MxRecord,
   PeopleSearchResponse,
   PersonEnrichmentResponse,
   PhoneEnrichmentResponse,
@@ -126,6 +129,8 @@ describe("response models", () => {
     expect(resp.found).toBe(true);
     expect(resp.email).toBe("antoine@blitz-agency.com");
     expect(resp.all_emails[0]?.email_domain).toBe("blitz-agency.com");
+    expect(resp.mx).toEqual(data.MX_RECORDS);
+    expect(resp.all_emails[0]?.mx).toEqual(data.MX_RECORDS);
   });
 
   it("parses phone enrichment", () => {
@@ -147,6 +152,29 @@ describe("response models", () => {
   it("parses company enrichment", () => {
     const resp = CompanyEnrichmentResponse.parse(data.COMPANY_ENRICHMENT);
     expect(resp.company?.domain).toBe("google.com");
+    expect(resp.company?.mx).toEqual(data.MX_RECORDS);
+  });
+
+  it("declares mx on the company and email models", () => {
+    // `blitzObject` preserves an undeclared key, so the value assertions above would pass
+    // even if `mx` were missing from the schema; check the shapes themselves.
+    expect(Object.keys(Company.shape)).toContain("mx");
+    expect(Object.keys(EmailMatch.shape)).toContain("mx");
+    expect(Object.keys(EmailEnrichmentResponse.shape)).toContain("mx");
+    expect(Object.keys(MxRecord.shape).sort()).toEqual(["host", "priority"]);
+  });
+
+  it("keeps mx null, [] and absent distinct (it is not coerced like other lists)", () => {
+    // company.mx: `null` = no MX data yet, `[]` = the domain takes no mail. Coercing
+    // either into the other (as `blitzList` does) would make a caller read "no data" as
+    // "takes no mail", so `mx` must come back exactly as sent.
+    expect(Company.parse({ mx: null }).mx).toBeNull();
+    expect(Company.parse({ mx: [] }).mx).toEqual([]);
+    expect(Company.parse({}).mx).toBeUndefined();
+    expect(EmailMatch.parse({ mx: null }).mx).toBeNull();
+    expect(EmailEnrichmentResponse.parse({ mx: [] }).mx).toEqual([]);
+    // Every other list still coerces: this is the single, deliberate exception.
+    expect(Company.parse({ specialties: null }).specialties).toEqual([]);
   });
 
   it("parses domain to linkedin", () => {
@@ -286,6 +314,7 @@ describe("response models", () => {
       "HQ",
       "Job",
       "Location",
+      "MxRecord",
       "Person",
       "TamByJobsMatch",
       "TamByPeopleMatch",

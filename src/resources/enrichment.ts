@@ -52,7 +52,10 @@ export class EnrichmentResource {
     return this.client.request("POST", PERSON, params, PersonEnrichmentResponse, options);
   }
 
-  /** Find a verified work email from a LinkedIn profile URL. */
+  /**
+   * Find a verified work email from a LinkedIn profile URL. Also returns the MX records
+   * of the email's domain (`mx`, and per address in `all_emails[].mx`).
+   */
   email(
     params: PersonLinkedinUrlParams,
     options?: RequestOptions,
@@ -84,7 +87,10 @@ export class EnrichmentResource {
     return this.client.request("POST", PHONE_TO_PERSON, params, PhoneToPersonResponse, options);
   }
 
-  /** Resolve a company LinkedIn URL to a full company profile. */
+  /**
+   * Resolve a company LinkedIn URL to a full company profile, including the MX records of
+   * its domain (`company.mx`; `null` = no MX data, `[]` = the domain takes no mail).
+   */
   company(
     params: CompanyLinkedinUrlParams,
     options?: RequestOptions,

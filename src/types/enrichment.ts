@@ -3,7 +3,7 @@
 import * as z from "zod";
 import { v2_response } from "./envelopes.js";
 import { blitzList, blitzObject } from "./models.js";
-import { Company, Person } from "./shared.js";
+import { Company, MxRecords, Person } from "./shared.js";
 
 /**
  * Result of `enrichment.person` (LinkedIn profile URL -> full profile).
@@ -25,6 +25,8 @@ export const EmailMatch = blitzObject({
   job_order_in_profile: z.number().nullish(),
   company_linkedin_url: z.string().nullish(),
   email_domain: z.string().nullish(),
+  /** MX records of this address's domain; `null` when not resolved. See {@link MxRecords}. */
+  mx: MxRecords,
 });
 export type EmailMatch = z.infer<typeof EmailMatch>;
 
@@ -32,6 +34,8 @@ export type EmailMatch = z.infer<typeof EmailMatch>;
 export const EmailEnrichmentResponse = v2_response({
   found: z.boolean().nullish(),
   email: z.string().nullish(),
+  /** MX records of the returned email's domain; `null` when not resolved. See {@link MxRecords}. */
+  mx: MxRecords,
   all_emails: blitzList(EmailMatch),
 });
 export type EmailEnrichmentResponse = z.infer<typeof EmailEnrichmentResponse>;

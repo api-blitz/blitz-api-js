@@ -30,6 +30,26 @@ export const Location = blitzObject({
 });
 export type Location = z.infer<typeof Location>;
 
+/** One MX record of a domain. */
+export const MxRecord = blitzObject({
+  priority: z.number().nullish(),
+  host: z.string().nullish(),
+});
+export type MxRecord = z.infer<typeof MxRecord>;
+
+/**
+ * The MX records of a domain, lowest priority first, at most 10. Used by
+ * `Company.mx`, `EmailEnrichmentResponse.mx` and `EmailMatch.mx`.
+ *
+ * Deliberately **not** a `blitzList`: `null` and `[]` mean different things, so coercing
+ * one into the other would lose information. `null` is "no MX data" (the domain is not
+ * resolved yet), `[]` is "the domain takes no mail" — `mx.length === 0` is only a safe
+ * "takes no mail" test after a `null` check. This is the one list field that keeps its
+ * `null`; every other `array | null` list goes through `blitzList`.
+ */
+export const MxRecords = z.array(MxRecord).nullish();
+export type MxRecords = z.infer<typeof MxRecords>;
+
 /** A single role from a person's work history. */
 export const Experience = blitzObject({
   job_title: z.string().nullish(),
@@ -158,6 +178,12 @@ export const Company = blitzObject({
   hq: HQ.nullish(),
   domain: z.string().nullish(),
   website: z.string().nullish(),
+  /**
+   * MX records of the company `domain`. Only `enrichment.company` returns it; it is
+   * `undefined` on search and TAM results. `null` means no MX data, `[]` means the domain
+   * takes no mail — see {@link MxRecords}.
+   */
+  mx: MxRecords,
 });
 export type Company = z.infer<typeof Company>;
 

@@ -174,15 +174,20 @@ export const WATERFALL_ICP = {
   results: [{ icp: 1, ranking: 1, person: PERSON }],
 };
 
+/** One MX record, as in the runtime spec's own `enrichment/email` example. */
+export const MX_RECORDS = [{ priority: 1, host: "aspmx.l.google.com" }];
+
 export const EMAIL_ENRICHMENT = {
   found: true,
   email: "antoine@blitz-agency.com",
+  mx: MX_RECORDS,
   all_emails: [
     {
       email: "antoine@blitz-agency.com",
       job_order_in_profile: 1,
       company_linkedin_url: "https://www.linkedin.com/company/blitz-api",
       email_domain: "blitz-agency.com",
+      mx: MX_RECORDS,
     },
   ],
   fair_usage: FAIR_USAGE,
@@ -204,7 +209,9 @@ export const EMAIL_TO_PERSON = { found: true, person: PERSON };
 
 export const PHONE_TO_PERSON = { found: true, person: PERSON };
 
-export const COMPANY_ENRICHMENT = { found: true, company: COMPANY };
+// `mx` is returned by `enrichment.company` only, so it stays off the shared COMPANY
+// fixture that search and TAM results reuse.
+export const COMPANY_ENRICHMENT = { found: true, company: { ...COMPANY, mx: MX_RECORDS } };
 
 export const DOMAIN_TO_LINKEDIN = {
   found: true,

@@ -290,7 +290,7 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   will always show these SDK-only fields, and they are not drift.** One `Location` model is
   reused for `Person.location`, `Experience.job_location` and `Job.location`, which the spec
   types with different key sets; `HQ` keeps two keys the spec dropped. As of the 2026-10-15
-  check the complete expected residue is:
+  check the complete expected residue is (plus `Company.mx`, in the next bullet):
   - `Person.location` — spec: `city`, `continent`, `country_code`, `postal_code`,
     `state_code`, `street_address`. **No extras.**
   - `Experience.job_location` — spec: `city`, `country_code`, `state_code`. SDK-only:
@@ -308,6 +308,17 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   caught (2026-09-22) — so keep the list current rather than waving a diff through. (A naive
   path-flattener also misreports `Company.specialties`, whose `anyOf[anyOf[array, null], null]`
   double wrapper hides the array; that one is a tooling artefact, not a model difference.)
+- **`mx` (MX records) keeps its `null`: it is the one list field that does not go through
+  `blitzList`.** `Company.mx` (`enrichment.company`), `EmailEnrichmentResponse.mx` and
+  `EmailMatch.mx` (`enrichment.email`) are declared once as the shared `MxRecords`, because
+  `null` and `[]` mean different things: `null` is "no MX data" (the domain is not resolved
+  yet), `[]` is "the domain takes no mail". Coercing `null` to `[]` would make a caller read
+  "no data" as "takes no mail". This differs from the `specialties` exemption reversed on
+  2026-09-22, where the spec showed no semantic difference between the two; here the API
+  documents one, in both the changelog and the spec. Pinned by a test, and a second assertion
+  keeps every other list coercing. `Company.mx` is on the shared `Company` (superset rule, not
+  a per-endpoint copy) but only `enrichment.company` returns it, so a spec diff reports it as
+  SDK-only on `search.companies`, `tam_by_jobs` and `tam_by_people` results — expected.
 - **`Education` has no `field_of_study`.** The API removed it on 2026-09-15 and folded the
   field of study into `degree` (`"Bachelor of Science, Industrial Engineering"`). Guarded by
   a schema-shape assertion in `models.test.ts` — `blitzObject` would otherwise happily
@@ -324,8 +335,8 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   `search.people` (both) and `company.tam_by_people` (`is_recent_hire` only — it matches
   current employees); inside each `cascade` tier on `search.waterfall_icp`; top-level on
   `search.employee_finder` and both `enrichment.company_distribution_by_*`. The runtime spec
-  has lagged the API owner on this twice — read the two 2026-10-15 decision-log entries
-  before "fixing" it against the spec.
+  lagged the API owner on this twice and caught up on 2026-10-15 (request-side diff empty
+  again) — see the three 2026-10-15 decision-log entries for the history.
 - **`Job.date_posted` stays a string.** The API emits a non-ISO-8601 timestamp
   (`"2026-07-08 23:00:07+02"` — space separator, offset, no `T`), so it is never
   coerced to a `Date`.
@@ -393,6 +404,26 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-10-15 (third pass)** — Re-pulled the runtime spec and changelog after the owner's
+  move. **(1) The placement is published and the request-side diff is empty again:**
+  `people.is_recent_hire` on `search.people` and `tam_by_people`, `people.include_*_jobs` on
+  `search.people`, and all three on each `cascade` item (the 2026-10-14/15 changelog entries
+  were rewritten in place, so their dates did not move). A `CascadeTier` now equals the
+  spec's seven keys exactly, which also settles the per-tier reading below. **(2) `mx` is new
+  in the responses, in three places, only one announced:** `Company.mx` on
+  `enrichment.company` (changelog 2026-10-15) and `EmailEnrichmentResponse.mx` plus
+  `EmailMatch.mx` on `enrichment.email` — **not in any changelog entry**; only a spec diff
+  showed it (marked required, "by priority, at most 10, null when not resolved"). Shape:
+  `MxRecord { priority, host }` and the shared `MxRecords`. **(3) `mx` is the first exception
+  to the "every list goes through `blitzList`" rule** (§7 has the reasoning: `null` and `[]`
+  are documented as different states). CLAUDE.md still says there is no exemption, so its
+  wording needs amending if the exception stands. **(4) Residue:** `Company.mx` joins the
+  expected spec-vs-SDK differences (§7). A kind-level diff (string/number/boolean/array per
+  field, both directions) found no mismatch; its one flag, `employee_finder.max_results`, is
+  the checker failing to read a field inherited through `Omit<>`, confirmed against the
+  compiler. Not mirrored in `blitz-api-py`, which needs both the flag move and `mx`. No live
+  API call was made.
+
 - **2026-10-15 (later)** — **Moved the three flags again, at the API owner's direction and
   ahead of the spec.** `is_recent_hire`, `include_active_jobs` and `include_past_jobs` now sit
   **inside the `people` object** on `search.people` and **inside each `cascade` tier** on
@@ -400,7 +431,7 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   the job-history flags); `search.employee_finder` and both `company_distribution_by_*` keep
   top-level `is_recent_hire` (no object to nest it in, and the owner named only the first two
   routes). This is the second flip of the same fields (nested → top-level → nested), so the
-  entry below is superseded for those three routes. *Expect a diff:* the runtime spec and the
+  entry below is superseded for those three routes. *Expected a diff — resolved by the entry above, kept for the history:* the runtime spec and the
   changelog still published the top-level placement when this landed (re-pulled, unchanged), so a
   request-side diff reports spec-only top-level `is_recent_hire`/`include_active_jobs`/
   `include_past_jobs` on `/v2/search/people` and `/v2/search/waterfall-icp-keyword` (and
