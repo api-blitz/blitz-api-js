@@ -40,8 +40,8 @@ export type WorkArrangementValue = WorkArrangement | (string & {});
  * Free-text include/exclude keyword filter.
  *
  * Every filter list on the search endpoints is capped at **50 entries** server
- * side; a longer list is rejected with a `422`. Split a longer list across
- * several requests.
+ * side (**10** in a waterfall tier's `location`); a longer list is rejected with a
+ * `422`. Split a longer list across several requests.
  */
 export interface KeywordFilter {
   include?: string[];
@@ -129,7 +129,7 @@ export interface CompanyHQFilter {
  * `company.tam_by_people`.
  *
  * `linkedin_url` is **not** here: only the people-side endpoints honour it, and
- * `search.companies` accepts-then-ignores it — see {@link PeopleCompanyFilter}.
+ * `search.companies` rejects it with a `422` — see {@link PeopleCompanyFilter}.
  */
 export interface CompanyFilter {
   name?: KeywordFilter;
@@ -161,9 +161,9 @@ export interface CompanyFilter {
  * and `company.tam_by_people` honour.
  *
  * Extending (rather than leaving the field on the shared filter) keeps it off
- * `search.companies`, which accepts it and then silently returns results for the
- * other criteria — the same accepted-but-ignored failure mode that got
- * `linkedin_url` removed from {@link PeopleFilter}, and the same split as
+ * `search.companies`, which rejects it with a `422` (since 2026-09-28; before, it
+ * silently returned results for the other criteria) — the same treatment as
+ * `linkedin_url` on {@link PeopleFilter}, and the same split as
  * {@link TamPeopleFilter} over {@link PeopleFilter}.
  */
 export interface PeopleCompanyFilter extends CompanyFilter {
@@ -178,7 +178,7 @@ export interface PeopleJobTitleFilter {
   exclude?: string[];
 }
 
-/** Location filter for the people side of a people search. */
+/** Location filter for the people side of a people search, and of a waterfall tier. */
 export interface PeopleLocationFilter {
   /** Keywords matched against the city the person is based in. */
   city?: KeywordFilter;
@@ -227,8 +227,8 @@ export interface RecentHireFlag {
    *   the tier's title filters — again among the jobs {@link JobHistoryFlags} selects.
    * - `search.employee_finder`: the person's current job at the company, which must also
    *   match `job_level` and `job_function`.
-   * - `enrichment.company_distribution_by_*`: only people whose current job at the
-   *   company started in the window are counted.
+   * - `enrichment.company_distribution_by_*`: only current jobs at the company that
+   *   started in the window count — per person on `_by_country`, per job on `_by_department`.
    */
   is_recent_hire?: boolean;
 }
@@ -255,8 +255,8 @@ export interface JobHistoryFlags {
  * `company.tam_by_people`.
  *
  * `linkedin_url` is **not** here: `/v2/search/people` stopped accepting it on
- * 2026-09-11 (a request that still sends it succeeds but silently ignores the
- * filter), and it survives only on `company.tam_by_people` — see
+ * 2026-09-11 (since 2026-09-28 a request that still sends it is rejected with a
+ * `422`), and it survives only on `company.tam_by_people` — see
  * {@link TamPeopleFilter}.
  *
  * `include_active_jobs`/`include_past_jobs` are **not** here either: only
@@ -266,6 +266,7 @@ export interface PeopleFilter extends RecentHireFlag {
   job_title?: PeopleJobTitleFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
+  /** Smallest LinkedIn connection count (0–500, `0` = no lower bound); above 500 is a `422`. */
   min_connections?: number;
   location?: PeopleLocationFilter;
   education?: PeopleEducationFilter;
@@ -290,8 +291,16 @@ export interface CascadeTier extends RecentHireFlag, JobHistoryFlags {
    * tokenized full-text match.
    */
   include_title: string[];
-  /** Server defaults to worldwide when omitted. Each entry must be at least 2 characters. */
-  location?: string[];
+  /**
+   * Where the people of this tier live: the same object as `people.location` on
+   * `search.people` ({@link PeopleLocationFilter}). A person must match every field you
+   * set; omit it to search the whole world. Each list takes at most **10** values here (a
+   * `422` above), and a country code is 2–3 letters.
+   *
+   * A `string[]` of country codes is the legacy form, still accepted: it is read as
+   * `country_code`, and a list holding `"WORLD"` turns the country filter off.
+   */
+  location?: PeopleLocationFilter | string[];
   /** Server defaults to `false` when omitted. */
   include_headline_search?: boolean;
   /** Phrases to exclude from the job title (up to 50); `[brackets]` work as in `include_title`. */
@@ -497,13 +506,19 @@ export interface TamByPeopleParams extends CursorPaginatedParams {
   people?: TamPeopleFilter;
 }
 
+/** Params for `search.employee_finder`. Each list is capped at 50 entries (`422` above). */
 export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireFlag {
   company_linkedin_url: string;
+  /**
+   * Country codes such as `US`. Server default `["WORLD"]` (no country filter); a list
+   * holding `"WORLD"` drops the filter.
+   */
   country_code?: string[];
   continent?: ContinentValue[];
   sales_region?: SalesRegionValue[];
   job_level?: JobLevelValue[];
   job_function?: JobFunctionValue[];
+  /** Smallest LinkedIn connection count (0–500, `0` = no lower bound); above 500 is a `422`. */
   min_connections_count?: number;
 }
 

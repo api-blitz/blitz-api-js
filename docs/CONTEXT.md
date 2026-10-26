@@ -15,9 +15,9 @@ B2B data / GTM REST API (people & company search, contact enrichment, utilities)
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
 behaves the same way over all 21 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
-when changing any endpoint. (As of 2026-10-15 `blitz-api-py`'s `main` carries the
-`fair_usage` / `records_remaining` sync, `tam_by_people` and the `field_of_study` removal;
-the 2026-10-14 sync is in flight there on a `sdk-is_recent_hire-update` branch.)
+when changing any endpoint. (As of 2026-10-26 `blitz-api-py` 4.1.0 on `main` carries the
+`fair_usage` / `records_remaining` sync, `tam_by_people`, the `field_of_study` removal and
+the 2026-10-14/15 sync: the nested `is_recent_hire` and job-history flags, and `mx`.)
 
 Two design mandates:
 
@@ -34,16 +34,20 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 
 - **Base URL**: `https://api.blitz-api.ai`
 - **Auth**: `x-api-key` HTTP header (NOT `Authorization`).
-- **Rate limit**: 10 req/s **per endpoint** on all plans (legacy plans created before
-  2026-09-30 run at 50); your per-endpoint value in
-  `key_info.max_requests_per_seconds`. The SDK's `rate_limit_rps` default stays **5**,
-  deliberately half the cap.
+- **Rate limit**: set by the plan — 5 req/s on the free trial, 10 on Start, 25 on Scale,
+  custom on Build Your Infra (legacy plans created before 2026-09-30 run at 50) — counted
+  **per account** (all its keys share it) and **per endpoint**, over a 1-second window;
+  your per-endpoint value in `key_info.max_requests_per_seconds`. The SDK's
+  `rate_limit_rps` default stays **5**, the free-trial limit.
 - **OpenAPI**: 3.1.0. The live runtime spec (`https://api.blitz-api.ai/openapi`)
   reports `info.version` `1.0.0`; the docs-site mirror
   (`https://docs.blitz-api.ai/api-reference/v2.openapi.json`) reports `2.0.0`. They
   describe the same endpoints — see §3 for which to use for what. All endpoints are
   `/v2/...` (plus the public `/changelog/`).
-- **Status conventions**: 401 invalid/missing key · 402 Fair Use limit reached ·
+- **Status conventions**: 401 invalid/missing key, or a valid key whose plan lacks the
+  route (`message`: "You do not have access to this route") · 402 Fair Use limit reached
+  (body carries `fair_usage`, exposed as `APIStatusError.fair_usage`) · 423 account locked
+  (`{blocked: true, message}`, any authenticated route) ·
   404 not found · 422 invalid input — any `/v2` endpoint can reject a body, e.g. a filter
   list over 50 entries or, since 2026-09-28, **an unknown field at any depth** (it used to be
   dropped silently). Since that date the body is `{success: false, message, errors:
@@ -51,10 +55,10 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   problems, `errors` carries up to 20, each with a full field path); the runtime spec still
   declares the older `{success, error:{code, message}}`, and only on `domain-to-linkedin`.
   400 is a request body that is not valid JSON (the SDK always sends JSON) · 429 rate limited
-  (wait 60s then retry) · **503 partial search failure**, explicitly retriable — the runtime
-  spec declares it on all ten search, jobs, TAM and company-distribution endpoints (the docs
-  mirror lists it on four; since 2026-08-05 the search/jobs endpoints return it instead of a
-  truncated page) · 5xx server error. The SDK already handles all of it with no
+  (the SDK waits `Retry-After`, which the API sets to 1 s; 60 s if absent) · **503 partial
+  search failure**, explicitly retriable — the runtime spec declares it on all ten search,
+  jobs, TAM and company-distribution endpoints (since 2026-08-05 the search/jobs endpoints
+  return it instead of a truncated page) · 5xx server error. The SDK already handles all of it with no
   special-casing: 503 falls under `>= 500` so it retries as a `ServerError`, and 422 is a
   non-retried `APIStatusError` whose `message` is the body's one-line summary and whose
   `body.errors` holds the field list.
@@ -143,8 +147,9 @@ break deserialization between SDK releases.
   injectable for tests.
 - **Completeness fix caught by cross-checking the live spec**: the live `waterfall-icp`
   response includes top-level `company_linkedin_url`, `max_results`, and
-  `results_length` (its old spec example was `null`, so the Python model omits
-  them). The TS `WaterfallIcpResponse` includes them.
+  `results_length` (its old spec example was `null`, so the Python model omitted
+  them). The TS `WaterfallIcpResponse` includes them. *(No longer a divergence:
+  `blitz-api-py` 4.1.0's `WaterfallIcpResponse` carries all three too.)*
 - **Pagination**: `search.people`/`companies`, `jobs.search`/`company`,
   `company.tam_by_jobs`/`tam_by_people` (cursor) and
   `search.employee_finder` (page) return a `PagePromise` (`src/pagination.ts`),
@@ -152,8 +157,8 @@ break deserialization between SDK releases.
   snake_case. NOTE (corrected 2026-06-02): the Python SDK *also* paginates the same
   cursor/page methods, jobs included
   (`AsyncCursorPage`/`AsyncPageNumberPage`, `auto_paging_iter`/`iter_pages`); the public
-  surfaces intentionally diverge — TS uses `.data` + `for await` + `.collect()` and a
-  non-advancing-cursor guard (which Python lacks), where Python uses `.results` +
+  surfaces intentionally diverge — TS uses `.data` + `for await` + `.collect()` (both SDKs
+  guard against a non-advancing cursor), where Python uses `.results` +
   `auto_paging_iter()` and names the offset class `PageNumberPage` (TS: `OffsetPage`).
   `await` it for the first `Page` (`.data`
   items + `.response` raw 1:1 body + `has_next_page()`/`get_next_page()`/`iter_pages()`),
@@ -241,15 +246,19 @@ retry per policy.
 BlitzError
 ├── APIConnectionError -> APITimeoutError      # request never completed
 ├── APIResponseValidationError                 # 2xx body not JSON / wrong shape; .status_code, .request_id, .cause
-└── APIStatusError                             # non-2xx; .status_code, .body, .message, .request_id
-    ├── AuthenticationError  # 401
+└── APIStatusError                             # non-2xx; .status_code, .body, .message, .request_id, .fair_usage
+    ├── AuthenticationError  # 401 (missing/invalid key, or a valid key without access to the route)
     ├── InsufficientRecordsError  # 402
     ├── NotFoundError        # 404
     ├── RateLimitError       # 429 (only after retries exhausted)
     └── ServerError          # 5xx (only after retries exhausted)
 ```
 
-Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx).
+Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx). That covers
+`422` (invalid body, see §2) and `423` (locked account: `{blocked: true, message}` on any
+authenticated route, `key_info` included; not retried, the fix is to contact support).
+`.fair_usage` is the error body's `fair_usage` block parsed leniently (sent on `402`), else
+`null` — the same attribute `blitz-api-py` has.
 `error.name` is set per class via `new.target.name`.
 
 The 402 class is **`InsufficientRecordsError`**, matching `blitz-api-py`. Two aliases
@@ -325,8 +334,11 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   preserve a stray raw key and let the removal go unnoticed.
 - **`Person.profile_picture_url` is always `null`** since 2026-09-15. The API still returns
   the key, so the field stays on the model (marked `@deprecated`) rather than being dropped.
-- **`Person.headline` is derived**, not the free-text LinkedIn headline: it is built from the
-  first position as `<job title> | @<employer>`.
+- **`Person.headline` is derived**, not the free-text LinkedIn headline: it is built from
+  `experiences[0]` as `<job title> | @<employer>` — the matched position on `search.people`
+  and `search.waterfall_icp` (possibly a past one), the current job at the company on
+  `search.employee_finder`, the first position in profile order on `enrichment.person` and
+  the reverse lookups.
 - **`Experience.job_contract_type`/`job_work_arrangement` stay loose strings**, not the
   request-side `EmploymentType`/`WorkArrangement` enums — those enums exist only on the
   request side of the *jobs* endpoints, and the person payload's values are free-form.
@@ -386,23 +398,49 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 - Rate limiting is **per endpoint**: the client holds one token bucket per endpoint path
   (lazy `Map` in `client.ts`), each sized at `rate_limit_rps` (5 by default), so a burst on
   one endpoint (e.g. `enrichment.email`) never throttles another (e.g. `enrichment.phone`).
-  This mirrors the API, whose server-side limit is itself **per endpoint** (10 rps on each
-  endpoint independently, per the docs), so a single client instance stays under the limit on
-  every endpoint. The 429 retry path remains the backstop for bursts across processes (each
+  This mirrors the API, whose server-side limit is itself **per endpoint** (at the plan's
+  rate, counted per account), so a single client instance stays under the limit on
+  every endpoint. The 429 retry path is the backstop for bursts across keys or processes (each
   process has its own buckets). `blitz-api-py` is also per endpoint (sliding window there vs.
   token bucket here), so the "mirror 1:1" parity holds.
 - Rate limiter does not auto-detect your per-endpoint limit from `key_info` (uses 5 rps,
-  half the API's 10 — so the default leaves throughput on the table by design).
+  the free-trial limit — so on a paid plan the default leaves throughput on the table by design).
 - Request-side **list caps are not enforced client-side**: the API rejects any filter list
-  over 50 entries (and a `cascade` over 10 steps) with a `422`. The SDK documents the caps
-  on the filter interfaces but does not validate, so an over-long list surfaces as a server
-  error rather than a type error.
+  over 50 entries (10 in a waterfall tier's `location`, and a `cascade` over 10 steps) with
+  a `422`. The SDK documents the caps on the filter interfaces but does not validate, so an
+  over-long list surfaces as a server error rather than a type error.
 - `z.looseObject` remains the safety net for response drift, now backed by real response
   `properties` in the runtime spec (see §3) rather than examples alone.
 
 ---
 
 ## 10. Decision log
+
+- **2026-10-26** — Synced against the API code (`origin/master`) and the deployed runtime
+  spec, after an audit of the SDK against production. **(1) `CascadeTier.location` is
+  `PeopleLocationFilter | string[]`** (changelog 2026-10-20). The object — `city`,
+  `country_code`, `continent`, `sales_region`, the same filter as `people.location` on
+  `search.people` — reuses `PeopleLocationFilter`; each of its lists takes at most 10 values
+  (`422` above, tighter than the 50 elsewhere) and a country code is 2–3 letters. The legacy
+  `string[]` of country codes stays on the union because the changelog says it still works
+  (the API reads it as `country_code`, and a list holding `"WORLD"` drops the country
+  filter), though the spec now shows only the object. Non-breaking for code that builds tiers:
+  the union widens the old type, and a tier still has the spec's seven keys. Code that reads
+  `tier.location` back as an array must now narrow it with `Array.isArray`. **(2) `APIStatusError.fair_usage`**,
+  parsed leniently from the error body (the API sends it on `402`): the attribute
+  `blitz-api-py` has had since 2026-09-02. Additive. **(3) Docs only:** the `422` body, the
+  `423` locked account and the "no access to this route" `401` in the README and
+  `errors.ts`; the plan-based rate limit (5/10/25/custom req/s, per account and per
+  endpoint) replaces "10 req/s on all plans", so the default `5` is the free-trial limit,
+  not half a cap; `linkedin_url` on `search.companies`/`search.people` is a `422` since
+  2026-09-28, not ignored (the type split stands, its stated reason changed);
+  `min_connections`/`min_connections_count` run 0–500; `headline` is built from
+  `experiences[0]`; `company_distribution_by_department` counts jobs, not people.
+  `Experience.company_domain` is left as is, in step with `blitz-api-py`: the code fills it
+  only on `search.people` and `search.employee_finder`, the 2026-09-15 changelog promises
+  all six person endpoints, and which one gives is the API owner's call.
+  **(4)** The stale cross-SDK notes in §1/§4 and the open `tam_by_jobs` default (the code
+  says 10) are annotated below. No live API call was made.
 
 - **2026-10-15 (third pass)** — Re-pulled the runtime spec and changelog after the owner's
   move. **(1) The placement is published and the request-side diff is empty again:**
@@ -422,7 +460,7 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   field, both directions) found no mismatch; its one flag, `employee_finder.max_results`, is
   the checker failing to read a field inherited through `Omit<>`, confirmed against the
   compiler. Not mirrored in `blitz-api-py`, which needs both the flag move and `mx`. No live
-  API call was made.
+  API call was made. *(Mirrored since: `blitz-api-py` 4.1.0 has both.)*
 
 - **2026-10-15 (later)** — **Moved the three flags again, at the API owner's direction and
   ahead of the spec.** `is_recent_hire`, `include_active_jobs` and `include_past_jobs` now sit
@@ -450,7 +488,8 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   top-level form is now the `@ts-expect-error`), and the positive tests annotate their bodies
   with the params type: a bare `const body = {…}` passed by variable skips TypeScript's
   excess-property check and kept passing when a mutation removed the fields from the types.
-  Not yet mirrored in `blitz-api-py`, whose branch still has them top-level.
+  Not yet mirrored in `blitz-api-py`, whose branch still has them top-level. *(Mirrored
+  since: `blitz-api-py` 4.1.0 nests them the same way.)*
 
 - **2026-10-15** — Synced the 2026-09-28 and 2026-10-14 API releases (the changelog is now
   39 entries; the last sync, 2026-09-22, predates both). A two-way diff of the SDK against
@@ -525,6 +564,9 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
   `cascade[].location[]` `minLength: 2` are documented (the latter on `CascadeTier.location`),
   not enforced, per the list-caps rule. Verified against the specs and changelog only — no
   live API call was made, so the new filters' runtime behaviour is as documented, not observed.
+  *(2026-10-26: the API code settles the `tam_by_jobs` default at 10, so the docs mirror is the
+  stale side; `cascade[].location` became an object on 2026-10-20, with 10-value lists — see
+  the 2026-10-26 entry.)*
 
 - **2026-09-22** — **`experiences[]` on `search.people` carries the matched position
   only — treat it as a single entry.** Resolved by the API owner after #27 challenged it;

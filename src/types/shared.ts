@@ -110,9 +110,11 @@ export const Person = blitzObject({
   nickname: z.string().nullish(),
   civility_title: z.string().nullish(),
   /**
-   * Built from the person's first position as `<job title> | @<employer>` —
-   * since 2026-09-15 it is no longer the free-text headline on the LinkedIn
-   * profile.
+   * Built from `experiences[0]` as `<job title> | @<employer>` — since 2026-09-15 it
+   * is no longer the free-text headline on the LinkedIn profile. On `search.people` and
+   * `search.waterfall_icp` that is the matched position, possibly a past one (see
+   * `job_is_current`); on `search.employee_finder`, the current job at the company; on
+   * `enrichment.person` and the reverse lookups, the first position in profile order.
    */
   headline: z.string().nullish(),
   about_me: z.string().nullish(),
@@ -125,11 +127,11 @@ export const Person = blitzObject({
    */
   profile_picture_url: z.string().nullish(),
   /**
-   * How much of the career is returned depends on the endpoint. `search.people`
-   * sends the position that matched the query — in practice a single entry, so treat
-   * it as one and don't read it as a career (since 2026-09-21; the API reference page
-   * still describes the old full-history behaviour and is out of date). With
-   * `include_past_jobs` that position may be a past one — check `job_is_current`.
+   * How much of the career is returned depends on the endpoint. `search.people`,
+   * `search.employee_finder` (the current job at the company) and `search.waterfall_icp`
+   * send one entry, the position that matched the query, so don't read it as a career
+   * (since 2026-09-21). With `include_past_jobs` that position may be a past one —
+   * check `job_is_current`.
    * `enrichment.person` and the reverse lookups send every position held, in profile
    * order.
    */
@@ -200,7 +202,7 @@ export type MeteredValue = z.infer<typeof MeteredValue>;
 
 /** Request-rate counters inside {@link FairUsage}. */
 export const FairUsageRateLimit = blitzObject({
-  /** Requests this API key may send per second. */
+  /** Requests your account may send per second to this endpoint (shared by all its API keys). */
   requests_per_second: z.number().nullish(),
   /** Requests left in the current one-second window. */
   remaining_this_second: z.number().nullish(),

@@ -120,7 +120,10 @@ export type CompanyDistributionByCountryResponse = z.infer<
   typeof CompanyDistributionByCountryResponse
 >;
 
-/** Headcount for a single department (`Other` when unclassified). */
+/**
+ * Current jobs in a single department (`Other` when unclassified). Counts **jobs**, not
+ * people — see {@link CompanyDistributionByDepartmentResponse}.
+ */
 export const DepartmentDistributionItem = blitzObject({
   department: z.string().nullish(),
   count: z.number().nullish(),
@@ -132,7 +135,10 @@ export type DepartmentDistributionItem = z.infer<typeof DepartmentDistributionIt
  * Result of `enrichment.company_distribution_by_department`.
  *
  * On `found: false` (the company is unknown or has no current employees) no record is
- * charged.
+ * charged. `count`, `total_employees` and `percentage_ratio` count the current **jobs** at
+ * the company, not people: a person with two current jobs there counts twice, possibly in
+ * two departments, so `total_employees` can exceed the people count of
+ * `company_distribution_by_country`.
  */
 export const CompanyDistributionByDepartmentResponse = v2_response({
   found: z.boolean().nullish(),
