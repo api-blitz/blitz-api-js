@@ -41,10 +41,10 @@ pnpm dlx @arethetypeswrong/cli --pack
   **generated** `enums.ts`.
 - `src/errors.ts`, `src/rate-limit.ts`, `src/constants.ts`, `src/version.ts`.
 
-Response models are **hand-written**: the OpenAPI spec types request bodies
-precisely but its responses are example-only, so a generator can't drive them.
-Schemas are derived from the docs' response examples (verified against the public
-docs / OpenAPI spec) and use `z.looseObject` so unknown fields are preserved (forward-compat).
+Response models are **hand-written**. The runtime spec has typed its responses since
+2026-09-15, but the models stay hand-written for the reasons in `docs/CONTEXT.md` §3.
+Schemas are verified against the runtime spec's response `properties` and the docs
+mirror's examples, and use `z.looseObject` so unknown fields are preserved (forward-compat).
 
 The public surface is **snake_case everywhere** (methods, params, response keys)
 to match the API and the Python SDK 1:1. Biome's `useNamingConvention` rule is

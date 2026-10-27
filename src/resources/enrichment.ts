@@ -63,7 +63,10 @@ export class EnrichmentResource {
     return this.client.request("POST", EMAIL, params, EmailEnrichmentResponse, options);
   }
 
-  /** Find a phone number from a LinkedIn profile URL (US only). */
+  /**
+   * Find a phone number from a LinkedIn profile URL (US only). Not on the free trial: a
+   * key whose plan lacks it gets a `401` with "You do not have access to this route".
+   */
   phone(
     params: PersonLinkedinUrlParams,
     options?: RequestOptions,
@@ -144,7 +147,8 @@ export class EnrichmentResource {
   }
 
   /**
-   * Get a company's headcount broken down by department ("Other" when unclassified).
+   * Get a company's current jobs broken down by department ("Other" when unclassified).
+   * Counts **jobs**, not people: a person with two current jobs there counts twice.
    * Costs **1 record on success**; `found: false` is free.
    */
   company_distribution_by_department(

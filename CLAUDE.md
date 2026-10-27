@@ -61,8 +61,8 @@ changes — it records the design decisions so you don't re-derive them.
   `blitzList` — there is no "genuinely nullable" exemption, because the spec types every
   `array | null` list the same way and an exempt list just moves a null check onto callers.
 - **Request-side list caps are documented, not enforced.** The API rejects a filter list
-  over 50 entries (`cascade`: 10) with a `422`; say so in the interface doc comment and
-  let the server enforce it.
+  over 50 entries (`cascade`, and each list in a tier's `location`: 10) with a `422`; say
+  so in the interface doc comment and let the server enforce it.
 
 ## Commands
 

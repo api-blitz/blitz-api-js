@@ -128,7 +128,7 @@ later are preserved, typed as `unknown`):
 ```ts
 {
   full_name: "Jordan Lee",
-  headline: "VP of Engineering | @Acme", // derived from the first position
+  headline: "VP of Engineering | @Acme", // built from experiences[0], the matched position
   linkedin_url: "https://www.linkedin.com/in/example-person",
   location: { city: "San Francisco", state_code: "CA", country_code: "US", continent: "North America" },
   experiences: [
@@ -139,9 +139,9 @@ later are preserved, typed as `unknown`):
 ```
 
 `experiences[]` on a **search** result carries the position that matched your query —
-in practice a single entry — not the person's career. (The API reference page still
-describes the old full-history behaviour; it is out of date, per the 2026-09-21 changelog
-entry.) Write your code for one position and don't index past it. If you need the whole
+in practice a single entry — not the person's career. `search.people`,
+`search.employee_finder` (the current job at the company) and `search.waterfall_icp` each
+return one entry. Write your code for one position and don't index past it. If you need the whole
 career in profile order, `client.enrichment.person({ person_linkedin_url })` returns the
 same `person` shape with every position held (1 record on success, free on a miss):
 
@@ -334,13 +334,16 @@ await client.enrichment.email({ person_linkedin_url: "…" }, { timeout: 5 });
 ```
 
 The client-side rate limiter is a token bucket applied **per endpoint**, mirroring the API,
-whose limit is itself per endpoint (10 req/s on each endpoint independently — e.g.
-`enrichment.email` and `enrichment.phone` get separate budgets; check yours via
-`(await client.account.key_info()).max_requests_per_seconds`). Each endpoint gets its own
+whose limit is itself per endpoint. The API's limit depends on your plan — 5 req/s on the
+free trial, 10 on Start, 25 on Scale, custom on Build Your Infra (plans created before
+2026-09-30 run at 50) — and is counted per account (all its API keys share it) and per
+endpoint, over a 1-second window: e.g. `enrichment.email` and `enrichment.phone` get
+separate budgets. Check yours via
+`(await client.account.key_info()).max_requests_per_seconds`. Each endpoint gets its own
 bucket that admits at most `rate_limit_rps` requests per second, so a single client instance
 stays under the limit on every endpoint, and a burst on one never throttles another. The
-default `5` deliberately sits at half the cap — raise it to your key's
-`max_requests_per_seconds` to use the full budget. Across multiple processes you may still
+default `5` is the free-trial limit — raise it to your key's `max_requests_per_seconds` to
+use the full budget. Across multiple processes (or several keys of one account) you may still
 hit `429` — the retry path handles that.
 
 ## Usage & rate limit (`fair_usage`)
@@ -390,9 +393,9 @@ try {
   await client.enrichment.email({ person_linkedin_url: "..." });
 } catch (err) {
   if (err instanceof InsufficientRecordsError) {
-    // 402 — Fair Use record limit reached
+    // 402 — Fair Use record limit reached; err.fair_usage?.next_reset_at says when it resets
   } else if (err instanceof AuthenticationError) {
-    // 401 — bad key
+    // 401 — missing or invalid key, or no access to this endpoint (read err.message)
   } else if (err instanceof APIResponseValidationError) {
     // 2xx, but the body wasn't valid JSON or didn't match the schema (err.cause has details)
   } else if (err instanceof APIStatusError) {
@@ -410,8 +413,26 @@ The 402 class is **`InsufficientRecordsError`** as of 3.0.0, matching `blitz-api
 using `instanceof`, update it now. The older `InsufficientCreditsError` alias, deprecated
 in 2.0.0, is **removed** in this release.
 
+A `401` is not always a bad key: a valid key whose plan does not include the endpoint
+called gets one too, with `err.message` set to `"You do not have access to this route"`
+(Find Mobile & Direct Phone, `enrichment.phone`, is not part of the free trial). Read
+`err.message`, or `(await client.account.key_info()).allowed_apis`, before replacing the key.
+
+A status without its own class is a plain `APIStatusError`; check `err.status_code`:
+
+- `422` — the request body is invalid, e.g. a list over its cap or, since 2026-09-28, a
+  field the endpoint does not define, at any depth. `err.message` sums up the first three
+  problems and the body's `errors` array lists up to 20 `{ field, message }` entries, each
+  with the full field path (such as `company.industry.include[0]`) and a suggested fix when
+  there is one.
+- `423` — the account is locked (`err.body` is `{ blocked: true, message }`), on every
+  `/v2` endpoint, `account.key_info()` included. Contact support to unlock it.
+
+Every `APIStatusError` also carries `err.fair_usage`: the `fair_usage` block of the error
+body when the API sends one (it does on a `402`), else `null`.
+
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
-`max_retries`; `401`/`402`/`404` throw immediately. A **pre-response** network
+`max_retries`; `401`/`402`/`404`/`422`/`423` throw immediately. A **pre-response** network
 error (DNS failure, connection refused) is retried, then surfaces as
 `APIConnectionError`. **Timeouts are not retried** — with `fetch` we can't tell
 whether the request already reached the (per-result-billed) server, so a timeout
