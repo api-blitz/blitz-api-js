@@ -264,6 +264,7 @@ export interface JobHistoryFlags {
  */
 export interface PeopleFilter extends RecentHireFlag {
   job_title?: PeopleJobTitleFilter;
+  job_description?: KeywordFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
   min_connections?: number;
@@ -416,6 +417,7 @@ export interface JobCompanyFilter {
   size?: CompanySizeFilter;
   keywords?: KeywordFilter;
   hq?: JobCompanyHQFilter;
+  mx?: MxFilter;
 }
 
 // ---------------------------------------------------------------------------

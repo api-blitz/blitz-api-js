@@ -6,6 +6,7 @@ import type {
   CompanyLinkedinUrlParams,
   CompanySearchParams,
   EmployeeFinderParams,
+  JobSearchParams,
   PeopleSearchParams,
   TamByPeopleParams,
   WaterfallIcpParams,
@@ -550,6 +551,22 @@ describe("2026-10-14 request fields", () => {
     for (const key of ["is_recent_hire", "include_active_jobs", "include_past_jobs"]) {
       expect(sent()).not.toHaveProperty(key);
     }
+  });
+
+  it("sends the 2026-10-26 people job-description and job-company MX filters", async () => {
+    const peopleSent = capture("/v2/search/people", data.PEOPLE_SEARCH);
+    const peopleBody: PeopleSearchParams = {
+      people: { job_description: { include: ["distributed systems"] } },
+    };
+    await client().search.people(peopleBody);
+    expect(peopleSent()).toEqual(peopleBody);
+
+    const jobsSent = capture("/v2/jobs/search", data.JOB_SEARCH);
+    const jobsBody: JobSearchParams = {
+      company: { mx: { provider: { include: ["google"] } } },
+    };
+    await client().jobs.search(jobsBody);
+    expect(jobsSent()).toEqual(jobsBody);
   });
 
   it("company.tam_by_people sends is_recent_hire inside people, plus mx and education years", async () => {

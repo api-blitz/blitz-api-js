@@ -152,6 +152,7 @@ describe("response models", () => {
   it("parses company enrichment", () => {
     const resp = CompanyEnrichmentResponse.parse(data.COMPANY_ENRICHMENT);
     expect(resp.company?.domain).toBe("google.com");
+    expect(resp.company?.revenue_range).toBe("$10M-$50M");
     expect(resp.company?.mx).toEqual(data.MX_RECORDS);
   });
 

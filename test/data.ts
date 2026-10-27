@@ -66,6 +66,7 @@ const COMPANY = {
   industry: "Software Development",
   type: "Public Company",
   size: "10001+",
+  revenue_range: "$10M-$50M",
   employees_on_linkedin: 328177,
   followers: 40093219,
   founded_year: null,

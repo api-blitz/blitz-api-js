@@ -172,6 +172,7 @@ export const Company = blitzObject({
   industry: z.string().nullish(),
   type: z.string().nullish(),
   size: z.string().nullish(),
+  revenue_range: z.string().nullish(),
   employees_on_linkedin: z.number().nullish(),
   followers: z.number().nullish(),
   founded_year: z.number().nullish(),
