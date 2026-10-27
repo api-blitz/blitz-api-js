@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.0](https://github.com/api-blitz/blitz-api-js/compare/v3.1.0...v3.2.0) (2026-10-27)
+
+
+### Features
+
+* sync with the 2026-10-20 API release ([35e25f4](https://github.com/api-blitz/blitz-api-js/commit/35e25f49e64c889effffd02a404e09035c16d327))
+* sync with the 2026-10-20 API release ([101ef30](https://github.com/api-blitz/blitz-api-js/commit/101ef30542481b7b5364048e2946b8545e54a7b3))
+
 ## [3.1.0](https://github.com/api-blitz/blitz-api-js/compare/v3.0.0...v3.1.0) (2026-10-15)
 
 
