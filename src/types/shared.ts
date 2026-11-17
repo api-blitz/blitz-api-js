@@ -68,6 +68,13 @@ export const Experience = blitzObject({
    */
   job_is_current: z.boolean().nullish(),
   /**
+   * Months the person has held the position: up to the current month for a current
+   * position, up to `job_end_date` for a past one. The start and end months both count,
+   * so a position that started this month gives `1`. `null` when `job_start_date` is
+   * missing, or when a past position has no `job_end_date`.
+   */
+  job_duration_months: z.number().nullish(),
+  /**
    * How the role is contracted (e.g. `Full-time`). Free-form upstream, so it is
    * kept a loose string rather than pinned to the request-side
    * `EmploymentType` enum.

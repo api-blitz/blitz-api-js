@@ -342,6 +342,15 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
 - **`Experience.job_contract_type`/`job_work_arrangement` stay loose strings**, not the
   request-side `EmploymentType`/`WorkArrangement` enums — those enums exist only on the
   request side of the *jobs* endpoints, and the person payload's values are free-form.
+- **`Experience.job_duration_months`** (2026-11-09) is on every `experiences[]` entry of the
+  six person-returning endpoints: the months in the position, start and end months both
+  counted, `null` when `job_start_date` is missing or a past position has no `job_end_date`.
+  A plain `z.number().nullish()`, like every numeric response field.
+- **`search.employee_finder` takes `job_title` and `job_description` as plain
+  `KeywordFilter`s** (2026-10-27), top-level like its other filters. Its `job_title` is *not*
+  `PeopleJobTitleFilter`: the spec closes the object at `include`/`exclude`, so
+  `include_linkedin_headline` there is a `422` and the type refuses it.
+  `job_description.exclude` takes 20 phrases, every other list 50.
 - **`is_recent_hire` and the job-history flags sit in a different place on each route**,
   modelled as the `RecentHireFlag`/`JobHistoryFlags` mixins: inside the `people` object on
   `search.people` (both) and `company.tam_by_people` (`is_recent_hire` only — it matches
@@ -415,6 +424,21 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-11-17** — Synced the 2026-10-27 and 2026-11-09 changelog entries against the
+  runtime spec. **(1) `EmployeeFinderParams.job_title` / `job_description`**, both
+  `KeywordFilter` (`include` up to 50 phrases; `job_description.exclude` up to 20). They
+  apply to the person's current job at the company, the same job as `job_level`,
+  `job_function` and `is_recent_hire`; `[brackets]` give an exact match on `job_title`
+  only. No new type: the spec gives both objects exactly `include`/`exclude`, and reusing
+  `PeopleJobTitleFilter` would offer `include_linkedin_headline`, which this endpoint
+  rejects (pinned by a `@ts-expect-error` in `resources.test.ts`). **(2)
+  `Experience.job_duration_months`** (`number | null`, required in the spec on all six
+  person-returning endpoints). Additive on the shared model, so no per-endpoint change.
+  Same names and types in `blitz-api-py`. **Not in this change:** the three 2026-10-26
+  changelog entries (`people.job_description` on `search.people` / `tam_by_people`,
+  `company.mx` on `jobs.search` / `tam_by_jobs`, and `revenue_range` on companies) are
+  still to sync in both SDKs.
 
 - **2026-10-26** — Synced against the API code (`origin/master`) and the deployed runtime
   spec, after an audit of the SDK against production. **(1) `CascadeTier.location` is

@@ -40,8 +40,9 @@ export type WorkArrangementValue = WorkArrangement | (string & {});
  * Free-text include/exclude keyword filter.
  *
  * Every filter list on the search endpoints is capped at **50 entries** server
- * side (**10** in a waterfall tier's `location`); a longer list is rejected with a
- * `422`. Split a longer list across several requests.
+ * side (**10** in a waterfall tier's `location`, **20** in `job_description.exclude` on
+ * `search.employee_finder`); a longer list is rejected with a `422`. Split a longer
+ * list across several requests.
  */
 export interface KeywordFilter {
   include?: string[];
@@ -226,7 +227,7 @@ export interface RecentHireFlag {
    * - `search.waterfall_icp`: within this tier, a job at the company that also matches
    *   the tier's title filters — again among the jobs {@link JobHistoryFlags} selects.
    * - `search.employee_finder`: the person's current job at the company, which must also
-   *   match `job_level` and `job_function`.
+   *   match `job_level`, `job_function`, `job_title` and `job_description`.
    * - `enrichment.company_distribution_by_*`: only current jobs at the company that
    *   started in the window count — per person on `_by_country`, per job on `_by_department`.
    */
@@ -506,7 +507,12 @@ export interface TamByPeopleParams extends CursorPaginatedParams {
   people?: TamPeopleFilter;
 }
 
-/** Params for `search.employee_finder`. Each list is capped at 50 entries (`422` above). */
+/**
+ * Params for `search.employee_finder`. Each list is capped at 50 entries (`422` above),
+ * except `job_description.exclude` (20). `job_level`, `job_function`, `job_title`,
+ * `job_description` and `is_recent_hire` must all hold in the same job: the person's
+ * current job at the company.
+ */
 export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireFlag {
   company_linkedin_url: string;
   /**
@@ -518,6 +524,26 @@ export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireF
   sales_region?: SalesRegionValue[];
   job_level?: JobLevelValue[];
   job_function?: JobFunctionValue[];
+  /**
+   * Phrases matched against the title of the person's current job at the company — the
+   * same job as `job_level` and `job_function`. A person matches when the title has every
+   * word of at least one `include` phrase; `exclude` drops a job whose title matches any
+   * phrase. Wrap a phrase in `[brackets]` (`"[Head of Sales]"`) to match the whole title
+   * exactly, ignoring case and accents. Each list takes up to 50 phrases.
+   *
+   * This is a plain {@link KeywordFilter}: unlike `people.job_title` on `search.people`,
+   * it has no `include_linkedin_headline`.
+   */
+  job_title?: KeywordFilter;
+  /**
+   * Phrases matched against the description of that same job. Every word of a phrase must
+   * appear, in any order, and several phrases are OR-ed; only the first 10,000 characters
+   * of a description are searched. `[brackets]` give no exact match here: `"[Sales]"` is
+   * searched as `Sales`. `exclude` drops a job whose description has every word of a
+   * phrase, and never drops a job with no description. `include` takes up to 50 phrases,
+   * `exclude` up to **20**.
+   */
+  job_description?: KeywordFilter;
   /** Smallest LinkedIn connection count (0–500, `0` = no lower bound); above 500 is a `422`. */
   min_connections_count?: number;
 }
