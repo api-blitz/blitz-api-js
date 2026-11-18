@@ -609,7 +609,7 @@ describe("2026-10-14 request fields", () => {
     const filters = {
       job_title: { include: ["[Head of Sales]", "Account Executive"], exclude: ["Intern"] },
       job_description: { include: ["Salesforce"], exclude: [] },
-    };
+    } satisfies Pick<EmployeeFinderParams, "job_title" | "job_description">;
     await client().search.employee_finder({ company_linkedin_url: COMPANY_URL, ...filters });
     expect(sent()).toEqual({ company_linkedin_url: COMPANY_URL, ...filters, page: 1 });
   });
