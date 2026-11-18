@@ -80,12 +80,14 @@ describe("status errors", () => {
   });
 
   it("leaves fair_usage null when the error body has no block", async () => {
-    // A locked account: `{ blocked, message }`, the one JSON error body without the block.
-    const ff = new FakeFetch([jsonResponse({ blocked: true, message: "locked" }, { status: 423 })]);
+    // A body from before 2026-11-17, or from a proxy: the attribute is `null`, not an error.
+    const ff = new FakeFetch([
+      jsonResponse({ success: false, message: "bad key" }, { status: 401 }),
+    ]);
     const error = await client(ff.fetch)
       .account.key_info()
       .catch((e: unknown) => e);
-    expect((error as APIStatusError).status_code).toBe(423);
+    expect(error).toBeInstanceOf(AuthenticationError);
     expect((error as APIStatusError).fair_usage).toBeNull();
   });
 
