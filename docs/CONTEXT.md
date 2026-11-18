@@ -418,7 +418,8 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 - **2026-11-17** — Re-pulled the live spec for the enums only. `Industry` gained
   **`"Artificial Intelligence"`**, in its alphabetical place in every inlined copy, which
-  gives 536 values with the `"Unknown"` sentinel. No changelog entry announces it. Picked up
+  gives 536 values with the `"Unknown"` sentinel. The changelog entry of 2026-11-17
+  announces it: `company.industry` accepts the value, which returned a `422` before. Picked up
   by `pnpm gen:enums:fetch` with zero hand-editing: one added line in `enums.ts` and one
   changed cache line; the other 11 enums are byte-identical. The release `publish` job
   fetches the live spec and fails on a stale `enums.ts`, so this had to land before the next
