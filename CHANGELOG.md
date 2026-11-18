@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.3.0](https://github.com/api-blitz/blitz-api-js/compare/v3.2.0...v3.3.0) (2026-11-18)
+
+
+### Features
+
+* add employee_finder job filters and job_duration_months ([#37](https://github.com/api-blitz/blitz-api-js/issues/37)) ([00140da](https://github.com/api-blitz/blitz-api-js/commit/00140da6089d63f59d445b2e1ce72b610c95855b))
+
+
+### Bug Fixes
+
+* add the Artificial Intelligence industry to the generated enums ([#36](https://github.com/api-blitz/blitz-api-js/issues/36)) ([5a749e3](https://github.com/api-blitz/blitz-api-js/commit/5a749e3cc74be2895438054e42bc2160cd3733bb))
+
 ## [3.2.0](https://github.com/api-blitz/blitz-api-js/compare/v3.1.0...v3.2.0) (2026-10-27)
 
 
