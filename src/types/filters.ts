@@ -41,8 +41,8 @@ export type WorkArrangementValue = WorkArrangement | (string & {});
  *
  * Every filter list on the search endpoints is capped at **50 entries** server
  * side (**10** in a waterfall tier's `location`, **20** in `job_description.exclude` on
- * `search.employee_finder`); a longer list is rejected with a `422`. Split a longer
- * list across several requests.
+ * `search.people`, `company.tam_by_people` and `search.employee_finder`); a longer list
+ * is rejected with a `422`. Split a longer list across several requests.
  */
 export interface KeywordFilter {
   include?: string[];
@@ -116,13 +116,56 @@ export interface RangeFilter {
   max?: number;
 }
 
-/** Headquarters-location filter for company search. */
+/**
+ * Include/exclude filter over country codes, in `people.location`, `company.hq` and the
+ * `location` of a waterfall tier.
+ *
+ * A code is a two-letter ISO 3166-1 code such as `"US"` or `"GB"`. Letter case does not
+ * matter and `"UK"` is read as `"GB"`. Since 2026-11-17 a value of any other length, such
+ * as `"USA"`, is rejected with a `422` (before, it was accepted and matched nothing).
+ *
+ * `"WORLD"` is the one exception: in `include` it means every country, so the country
+ * filter is off, also when the list holds other codes. `exclude` does not accept it.
+ *
+ * `include` never matches a record with no country on file, and `exclude` never drops one.
+ */
+export interface CountryCodeFilter {
+  include?: string[];
+  exclude?: string[];
+}
+
+/**
+ * Include/exclude filter over continents. `exclude` never drops a record with no
+ * continent on file.
+ */
+export interface ContinentFilter {
+  include?: ContinentValue[];
+  exclude?: ContinentValue[];
+}
+
+/**
+ * Include/exclude filter over sales regions. `exclude` never drops a record with no
+ * sales region on file.
+ */
+export interface SalesRegionFilter {
+  include?: SalesRegionValue[];
+  exclude?: SalesRegionValue[];
+}
+
+/**
+ * Headquarters-location filter for company search. A company must match every field you set.
+ *
+ * `country_code`, `continent` and `sales_region` take an object with `include` and
+ * `exclude` lists (since 2026-11-17). A plain list is the legacy form, still accepted: it
+ * is read as `include`. On `search.people` and `company.tam_by_people` the excludes apply
+ * to the same job as your other company filters.
+ */
 export interface CompanyHQFilter {
   city?: KeywordFilter;
   state?: KeywordFilter;
-  country_code?: string[];
-  continent?: ContinentValue[];
-  sales_region?: SalesRegionValue[];
+  country_code?: CountryCodeFilter | string[];
+  continent?: ContinentFilter | ContinentValue[];
+  sales_region?: SalesRegionFilter | SalesRegionValue[];
 }
 
 /**
@@ -179,13 +222,20 @@ export interface PeopleJobTitleFilter {
   exclude?: string[];
 }
 
-/** Location filter for the people side of a people search, and of a waterfall tier. */
+/**
+ * Location filter for the people side of a people search, and of a waterfall tier. A
+ * person must match every field you set.
+ *
+ * `country_code`, `continent` and `sales_region` take an object with `include` and
+ * `exclude` lists (since 2026-11-17). A plain list is the legacy form, still accepted: it
+ * is read as `include`.
+ */
 export interface PeopleLocationFilter {
   /** Keywords matched against the city the person is based in. */
   city?: KeywordFilter;
-  country_code?: string[];
-  continent?: ContinentValue[];
-  sales_region?: SalesRegionValue[];
+  country_code?: CountryCodeFilter | string[];
+  continent?: ContinentFilter | ContinentValue[];
+  sales_region?: SalesRegionFilter | SalesRegionValue[];
 }
 
 /**
@@ -265,6 +315,15 @@ export interface JobHistoryFlags {
  */
 export interface PeopleFilter extends RecentHireFlag {
   job_title?: PeopleJobTitleFilter;
+  /**
+   * Phrases matched against the description of a job. Every word of a phrase must appear,
+   * in any order, and several phrases are OR-ed; only the first 10,000 characters of a
+   * description are searched. It applies to the same job as the job title and company
+   * filters. `[brackets]` give no exact match here: `"[Sales]"` is searched as `Sales`.
+   * `exclude` drops a job whose description has every word of a phrase, and never drops a
+   * job with no description. `include` takes up to 50 phrases, `exclude` up to **20**.
+   */
+  job_description?: KeywordFilter;
   job_function?: JobFunctionValue[];
   job_level?: JobLevelValue[];
   /** Smallest LinkedIn connection count (0–500, `0` = no lower bound); above 500 is a `422`. */
@@ -296,7 +355,7 @@ export interface CascadeTier extends RecentHireFlag, JobHistoryFlags {
    * Where the people of this tier live: the same object as `people.location` on
    * `search.people` ({@link PeopleLocationFilter}). A person must match every field you
    * set; omit it to search the whole world. Each list takes at most **10** values here (a
-   * `422` above), and a country code is 2–3 letters.
+   * `422` above).
    *
    * A `string[]` of country codes is the legacy form, still accepted: it is read as
    * `country_code`, and a list holding `"WORLD"` turns the country filter off.
@@ -334,7 +393,7 @@ export interface WorkArrangementFilter {
 /** Location filter for a job posting (the job's location, not the company HQ). */
 export interface JobLocationFilter {
   city?: KeywordFilter;
-  /** ISO-3166 alpha-2 codes, matched exactly. */
+  /** Two-letter ISO 3166-1 codes, in any letter case. `UK` is read as `GB`. */
   country_code?: KeywordFilter;
 }
 
@@ -409,13 +468,13 @@ export interface JobCompanyHQFilter {
   city?: KeywordFilter;
   /** Wrap a phrase in `[brackets]` to match the whole state/region exactly, ignoring case and accents. */
   state?: KeywordFilter;
-  /** ISO-3166 alpha-2 codes, matched exactly. */
+  /** Two-letter ISO 3166-1 codes, in any letter case. `UK` is read as `GB`. */
   country_code?: KeywordFilter;
 }
 
 /**
- * Company-level firmographic criteria for `jobs.search`, matched against the
- * enriched company record behind each posting.
+ * Company-level firmographic criteria for `jobs.search` and `company.tam_by_jobs`,
+ * matched against the enriched company record behind each posting.
  */
 export interface JobCompanyFilter {
   /** `true` = only staffing/recruitment agencies, `false` = exclude confirmed
@@ -426,6 +485,8 @@ export interface JobCompanyFilter {
   size?: CompanySizeFilter;
   keywords?: KeywordFilter;
   hq?: JobCompanyHQFilter;
+  /** Mail provider of the company, from the MX records of its domains. */
+  mx?: MxFilter;
 }
 
 // ---------------------------------------------------------------------------
@@ -516,8 +577,9 @@ export interface TamByPeopleParams extends CursorPaginatedParams {
 export interface EmployeeFinderParams extends OffsetPaginatedParams, RecentHireFlag {
   company_linkedin_url: string;
   /**
-   * Country codes such as `US`. Server default `["WORLD"]` (no country filter); a list
-   * holding `"WORLD"` drops the filter.
+   * Two-letter ISO 3166-1 country codes such as `US`, in any letter case. `UK` is read
+   * as `GB`, and a value of any other length is a `422`. Server default `["WORLD"]` (no
+   * country filter); a list holding `"WORLD"` drops the filter.
    */
   country_code?: string[];
   continent?: ContinentValue[];

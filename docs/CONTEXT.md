@@ -62,7 +62,8 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   special-casing: 503 falls under `>= 500` so it retries as a `ServerError`, and 422 is a
   non-retried `APIStatusError` whose `message` is the body's one-line summary and whose
   `body.errors` holds the field list.
-- **`fair_usage`**: every `/v2` response (and the `402` body) carries a per-request
+- **`fair_usage`**: every `/v2` response (and, since 2026-11-17, every JSON error body,
+  where only `records_used` and `request_id` are always set) carries a per-request
   usage block — `records_used`, `records_remaining` (`number | "unlimited"`),
   `next_reset_at`, `rate_limit.{requests_per_second,remaining_this_second}`, and
   `request_id`. `rate_limit` is absent on `key-info`, the one endpoint that is not
@@ -257,7 +258,8 @@ BlitzError
 Unmapped non-2xx → generic `APIStatusError` (or `ServerError` for any 5xx). That covers
 `422` (invalid body, see §2) and `423` (locked account: `{blocked: true, message}` on any
 authenticated route, `key_info` included; not retried, the fix is to contact support).
-`.fair_usage` is the error body's `fair_usage` block parsed leniently (sent on `402`), else
+`.fair_usage` is the error body's `fair_usage` block parsed leniently (sent on every JSON
+error body since 2026-11-17), else
 `null` — the same attribute `blitz-api-py` has.
 `error.name` is set per class via `new.target.name`.
 
@@ -424,6 +426,30 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-11-18** — Synced the 2026-11-17 changelog entries and the three 2026-10-26
+  entries against the runtime spec. **(1) Geo filters take `include`/`exclude`.**
+  `country_code`, `continent` and `sales_region` on `CompanyHQFilter` and
+  `PeopleLocationFilter` (so also in a waterfall tier's `location`) are
+  `CountryCodeFilter | string[]`, `ContinentFilter | ContinentValue[]` and
+  `SalesRegionFilter | SalesRegionValue[]`. The plain list stays on the union because the
+  changelog says a list is still read as `include`, though the spec now shows only the
+  object: the same choice as `CascadeTier.location`. Non-breaking for code that builds
+  filters; code that reads one of these fields back as an array must narrow it with
+  `Array.isArray`. `search.employee_finder` keeps its plain lists (it has no `exclude`).
+  **(2) Country codes have two letters** on the people, company, waterfall and
+  employee-finder filters: `UK` is read as `GB`, `WORLD` in the codes to keep means every
+  country, and any other length is a `422`. Documented, not enforced, like the list caps:
+  the SDK sends the value as given. **(3) `fair_usage` on errors.** Every JSON error body
+  carries it, with only `records_used` and `request_id` always set. `FairUsage` already has
+  every field optional and `APIStatusError.fair_usage` already parses any error body, so
+  this is doc comments plus tests. **(4) 2026-10-26:** `PeopleFilter.job_description`
+  (`KeywordFilter`, on the shared filter because both `search.people` and
+  `company.tam_by_people` take it; `exclude` up to 20), `JobCompanyFilter.mx`
+  (`jobs.search` and `company.tam_by_jobs`; `jobs.company` has no `company` object), and
+  `Company.revenue_range` (`string | null`, on all four company-returning endpoints).
+  **(5) No change for `Accept-Encoding`:** `fetch` negotiates the response compression.
+  Same names and types in `blitz-api-py`.
 
 - **2026-11-17** — Synced the 2026-10-27 and 2026-11-09 changelog entries against the
   runtime spec. **(1) `EmployeeFinderParams.job_title` / `job_description`**, both

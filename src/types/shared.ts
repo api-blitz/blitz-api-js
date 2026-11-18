@@ -181,6 +181,11 @@ export const Company = blitzObject({
   industry: z.string().nullish(),
   type: z.string().nullish(),
   size: z.string().nullish(),
+  /**
+   * Label of the yearly revenue band of the company, such as `$10M-$50M`. `null` when the
+   * band is unknown. The `company.revenue` filter of `search.companies` matches this band.
+   */
+  revenue_range: z.string().nullish(),
   employees_on_linkedin: z.number().nullish(),
   followers: z.number().nullish(),
   founded_year: z.number().nullish(),
@@ -219,8 +224,10 @@ export type FairUsageRateLimit = z.infer<typeof FairUsageRateLimit>;
 /**
  * Record usage, rate limit, and tracing data for the request that returned it.
  *
- * The API attaches this block to every `/v2` response (and to the `402`
- * insufficient-balance error body). It is optional on every model so a response
+ * The API attaches this block to every `/v2` response, and since 2026-11-17 to every
+ * JSON error body (read it from `APIStatusError.fair_usage`). On an error only
+ * `records_used` and `request_id` are always there: `records_remaining`, `next_reset_at`
+ * and `rate_limit` can be absent. It is optional on every model so a response
  * from a deployment that predates it still parses — the same forward-compatible
  * posture as {@link blitzObject}.
  */

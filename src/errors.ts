@@ -90,8 +90,9 @@ export interface APIStatusErrorOptions {
  * - `body`: the parsed JSON body, or the raw text if it was not JSON.
  * - `message`: a human-readable message extracted from the body when present.
  * - `request_id`: the value of the `x-request-id` response header, if any.
- * - `fair_usage`: the body's {@link FairUsage} block when the API sent one (it does
- *   on `402`), else `null`.
+ * - `fair_usage`: the body's {@link FairUsage} block when the API sent one, else `null`.
+ *   Since 2026-11-17 every JSON error body of a `/v2` endpoint carries it. Only
+ *   `records_used` and `request_id` are always set on an error.
  * - `response`: the underlying `Response`.
  */
 export class APIStatusError extends BlitzError {

@@ -259,6 +259,34 @@ for await (const person of client.search.people({
 }
 ```
 
+`country_code`, `continent` and `sales_region` take `include` and `exclude` lists in
+`people.location`, in `company.hq` and in the `location` of a waterfall tier. `exclude`
+never drops a record with no value on file, and a plain list is still accepted and read
+as `include`. A country code has two letters, in any letter case, and `UK` is read as
+`GB`. A value of any other length is a `422`, except `WORLD` in the codes to keep, which
+means every country. `people.job_description` on `search.people` and
+`company.tam_by_people` matches phrases against the description of the job (`include` up
+to 50 phrases, `exclude` up to 20), and `company.mx` also filters `jobs.search` and
+`company.tam_by_jobs`. Each company carries `revenue_range`, the label of its yearly
+revenue band (`null` when the band is unknown).
+
+```ts
+// People in Europe, outside France and Germany, whose job description mentions outbound.
+for await (const person of client.search.people({
+  company: { hq: { sales_region: { exclude: ["APAC"] } } },
+  people: {
+    job_description: { include: ["outbound prospecting"], exclude: ["internship"] },
+    location: {
+      continent: { include: ["Europe"] },
+      country_code: { exclude: ["FR", "DE"] },
+    },
+  },
+  max_items: 100,
+})) {
+  console.log(person.full_name, person.location?.country_code);
+}
+```
+
 `search.employee_finder` also takes `job_title` and `job_description`, each an
 `{ include, exclude }` pair of phrase lists. They are matched against the person's current
 job at the company, the same job as `job_level`, `job_function` and `is_recent_hire`. Wrap a
@@ -453,7 +481,10 @@ A status without its own class is a plain `APIStatusError`; check `err.status_co
   `/v2` endpoint, `account.key_info()` included. Contact support to unlock it.
 
 Every `APIStatusError` also carries `err.fair_usage`: the `fair_usage` block of the error
-body when the API sends one (it does on a `402`), else `null`.
+body when the API sends one, else `null`. The API sends it on every JSON error body:
+`err.fair_usage.request_id` is the id to quote to support, and `err.fair_usage.records_used`
+is the number of records the failed request used. `records_remaining`, `next_reset_at` and
+`rate_limit` can be absent on an error.
 
 `429` and `5xx` are retried automatically (with backoff + jitter) up to
 `max_retries`; `401`/`402`/`404`/`422`/`423` throw immediately. A **pre-response** network
