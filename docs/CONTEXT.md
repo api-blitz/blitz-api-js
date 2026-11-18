@@ -215,7 +215,7 @@ src/
                   rather than a remembered convention.
     shared.ts     Location, Experience, Education, Certification, Person, HQ, Company,
                   MeteredValue, FairUsage.
-    enums.ts      GENERATED. Industry(535) + CompanyType/EmployeeRange/Continent/
+    enums.ts      GENERATED. Industry(536) + CompanyType/EmployeeRange/Continent/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement/MxProvider(66). Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
@@ -279,11 +279,11 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
 
 ## 7. Data-model specifics & quirks
 
-- **`Industry` has 535 values** including upstream oddities: near-duplicates
+- **`Industry` has 536 values** including upstream oddities: near-duplicates
   (`"Airlines and Aviation"` vs `"Airlines/Aviation"`) and one double-escaped value,
   `"Women\\'s Handbag Manufacturing"` (two literal backslashes + apostrophe). Kept
   byte-for-byte. The generator emits each value via `JSON.stringify` so escaping
-  round-trips exactly. The 535th, **`"Unknown"`** (added 2026-09-16), is a *sentinel*
+  round-trips exactly. The last one, **`"Unknown"`** (added 2026-09-16), is a *sentinel*
   rather than an industry — it matches companies with no industry value, and upstream
   appends it after the alphabetical run, which the generator preserves (it mirrors spec
   order, it does not sort).
@@ -416,6 +416,14 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-11-17** — Re-pulled the live spec for the enums only. `Industry` gained
+  **`"Artificial Intelligence"`**, in its alphabetical place in every inlined copy, which
+  gives 536 values with the `"Unknown"` sentinel. The changelog entry of 2026-11-17
+  announces it: `company.industry` accepts the value, which returned a `422` before. Picked up
+  by `pnpm gen:enums:fetch` with zero hand-editing: one added line in `enums.ts` and one
+  changed cache line; the other 11 enums are byte-identical. The release `publish` job
+  fetches the live spec and fails on a stale `enums.ts`, so this had to land before the next
+  release. Same change in `blitz-api-py`.
 - **2026-10-26** — Synced against the API code (`origin/master`) and the deployed runtime
   spec, after an audit of the SDK against production. **(1) `CascadeTier.location` is
   `PeopleLocationFilter | string[]`** (changelog 2026-10-20). The object — `city`,

@@ -194,7 +194,7 @@ from a union like `Industry` — or any raw string, so a value missing from the
 vendored taxonomy never blocks you.
 
 ```ts
-import { INDUSTRY } from "blitz-api-js"; // the full value array (535 industries)
+import { INDUSTRY } from "blitz-api-js"; // the full value array (536 values: 535 industries and "Unknown")
 import type { CompanyFilter, Industry } from "blitz-api-js";
 ```
 

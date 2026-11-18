@@ -33,6 +33,7 @@ export const INDUSTRY = [
   "Architectural and Structural Metal Manufacturing",
   "Architecture and Planning",
   "Armed Forces",
+  "Artificial Intelligence",
   "Artificial Rubber and Synthetic Fiber Manufacturing",
   "Artists and Writers",
   "Arts and Crafts",
