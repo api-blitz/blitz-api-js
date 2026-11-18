@@ -6,7 +6,9 @@ import type {
   CompanyLinkedinUrlParams,
   CompanySearchParams,
   EmployeeFinderParams,
+  JobSearchParams,
   PeopleSearchParams,
+  TamByJobsParams,
   TamByPeopleParams,
   WaterfallIcpParams,
 } from "../src/index.js";
@@ -578,6 +580,91 @@ describe("2026-10-14 request fields", () => {
       company: { mx: { provider: { include: ["microsoft", "google"] } } },
       max_results: 1,
     });
+  });
+
+  it("search.people sends the country, continent and sales region filters as include/exclude objects", async () => {
+    const sent = capture("/v2/search/people", data.PEOPLE_SEARCH);
+    const body: PeopleSearchParams = {
+      company: {
+        hq: {
+          country_code: { include: ["US", "CA"], exclude: ["GB"] },
+          continent: { exclude: ["Antarctica"] },
+          sales_region: { include: ["NORAM"] },
+        },
+      },
+      people: {
+        job_description: { include: ["outbound prospecting"], exclude: ["internship"] },
+        location: {
+          country_code: { exclude: ["FR"] },
+          continent: { include: ["Europe"] },
+          sales_region: { exclude: ["APAC"] },
+        },
+      },
+      max_results: 1,
+    };
+    await client().search.people(body);
+    // Sent as given: the SDK must not flatten an object into a list or drop `exclude`.
+    expect(sent()).toEqual(body);
+  });
+
+  it("company.tam_by_people sends job_description and the exclude lists", async () => {
+    const sent = capture("/v2/company/tam-by-people", data.TAM_BY_PEOPLE);
+    const body: TamByPeopleParams = {
+      company: { hq: { sales_region: { exclude: ["LATAM"] } } },
+      people: {
+        job_description: { include: ["Salesforce"] },
+        location: { country_code: { include: ["WORLD"], exclude: ["US"] } },
+      },
+      max_results: 1,
+    };
+    await client().company.tam_by_people(body);
+    expect(sent()).toEqual(body);
+  });
+
+  it("search.companies still accepts the plain-list form of the hq filters", async () => {
+    // The legacy form: the API reads a list as `include`. The SDK sends it unchanged.
+    const sent = capture("/v2/search/companies", data.COMPANY_SEARCH);
+    const body: CompanySearchParams = {
+      company: {
+        hq: { country_code: ["FR", "DE"], continent: ["Europe"], sales_region: ["EMEA"] },
+      },
+      max_results: 1,
+    };
+    await client().search.companies(body);
+    expect(sent()).toEqual(body);
+  });
+
+  it("search.waterfall_icp sends include/exclude objects in a tier location", async () => {
+    const sent = capture("/v2/search/waterfall-icp-keyword", data.WATERFALL_ICP);
+    const body: WaterfallIcpParams = {
+      company_linkedin_url: COMPANY_URL,
+      cascade: [
+        {
+          include_title: ["CEO"],
+          location: {
+            country_code: { exclude: ["US"] },
+            continent: { include: ["Europe", "Asia"] },
+            sales_region: { exclude: ["LATAM"] },
+          },
+        },
+        { include_title: ["CTO"], location: { country_code: ["GB"] } },
+      ],
+    };
+    await client().search.waterfall_icp(body);
+    expect(sent()).toEqual(body);
+  });
+
+  it("jobs.search and company.tam_by_jobs send the company mx provider filter", async () => {
+    const company = { mx: { provider: { include: ["google"], exclude: ["zoho"] } } };
+    const sent_search = capture("/v2/jobs/search", data.JOB_SEARCH);
+    const search: JobSearchParams = { company, max_results: 1 };
+    await client().jobs.search(search);
+    expect(sent_search()).toEqual(search);
+
+    const sent_tam = capture("/v2/company/tam-by-jobs", data.TAM_BY_JOBS);
+    const tam: TamByJobsParams = { job: { min_per_company: 2 }, company, max_results: 1 };
+    await client().company.tam_by_jobs(tam);
+    expect(sent_tam()).toEqual(tam);
   });
 
   it("MX_PROVIDER is generated from the spec and holds the `any` sentinel", () => {

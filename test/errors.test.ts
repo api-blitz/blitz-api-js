@@ -58,6 +58,37 @@ describe("status errors", () => {
     expect(err.request_id).toBe("req_123");
   });
 
+  it("exposes the fair_usage block of an error body, with only the fields the API sent", async () => {
+    // Since 2026-11-17 every JSON error body of a /v2 endpoint carries `fair_usage`. On an
+    // error only `records_used` and `request_id` are always there.
+    const body = {
+      success: false,
+      message: "Missing API key, please provide a valid API key in the 'x-api-key' header",
+      fair_usage: { records_used: 0, request_id: "019bae09-0055-7441-b2ea-16086e499219" },
+    };
+    const ff = new FakeFetch([jsonResponse(body, { status: 401 })]);
+    const error = await client(ff.fetch)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AuthenticationError);
+    const err = error as AuthenticationError;
+    expect(err.fair_usage?.records_used).toBe(0);
+    expect(err.fair_usage?.request_id).toBe("019bae09-0055-7441-b2ea-16086e499219");
+    expect(err.fair_usage?.records_remaining).toBeUndefined();
+    expect(err.fair_usage?.next_reset_at).toBeUndefined();
+    expect(err.fair_usage?.rate_limit).toBeUndefined();
+  });
+
+  it("leaves fair_usage null when the error body has no block", async () => {
+    // A locked account: `{ blocked, message }`, the one JSON error body without the block.
+    const ff = new FakeFetch([jsonResponse({ blocked: true, message: "locked" }, { status: 423 })]);
+    const error = await client(ff.fetch)
+      .account.key_info()
+      .catch((e: unknown) => e);
+    expect((error as APIStatusError).status_code).toBe(423);
+    expect((error as APIStatusError).fair_usage).toBeNull();
+  });
+
   it("surfaces a 422 field list, with the one-line summary as the message", async () => {
     // The `ValidationError` body the docs mirror documents since 2026-09-28:
     // `{ success, message, errors: [{ field, message }] }`. `message` summarises the first

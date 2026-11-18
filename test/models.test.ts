@@ -191,6 +191,14 @@ describe("response models", () => {
     expect(Object.keys(MxRecord.shape).sort()).toEqual(["host", "priority"]);
   });
 
+  it("declares revenue_range on the company model and keeps its null", () => {
+    expect(Object.keys(Company.shape)).toContain("revenue_range");
+    const resp = CompanyEnrichmentResponse.parse(data.COMPANY_ENRICHMENT);
+    expect(resp.company?.revenue_range).toBe("$10M-$50M");
+    // `null` is "band unknown".
+    expect(Company.parse({ revenue_range: null }).revenue_range).toBeNull();
+  });
+
   it("keeps mx null, [] and absent distinct (it is not coerced like other lists)", () => {
     // company.mx: `null` = no MX data yet, `[]` = the domain takes no mail. Coercing
     // either into the other (as `blitzList` does) would make a caller read "no data" as
