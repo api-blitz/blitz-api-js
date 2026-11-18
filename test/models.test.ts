@@ -18,6 +18,7 @@ import {
   EmailMatch,
   EmailToPersonResponse,
   EmployeeFinderResponse,
+  Experience,
   JobSearchResponse,
   KeyInfo,
   LinkedinToDomainResponse,
@@ -65,6 +66,7 @@ describe("response models", () => {
     expect(person?.experiences[0]?.job_location?.city).toBe("Sunnyvale");
     expect(person?.experiences[0]?.job_contract_type).toBe("Full-time");
     expect(person?.experiences[0]?.job_work_arrangement).toBe("Hybrid");
+    expect(person?.experiences[0]?.job_duration_months).toBe(20);
     expect(person?.location?.postal_code).toBe("94089");
     expect(person?.location?.street_address).toBe("1600 Amphitheatre Parkway");
     // `degree` carries the field of study; the API removed `field_of_study` on 2026-09-15.
@@ -80,6 +82,31 @@ describe("response models", () => {
       "school_name",
       "start_date",
     ]);
+  });
+
+  it("types job_duration_months as a nullable number on every experience", () => {
+    // `blitzObject` keeps unknown keys, so only the schema shape and a rejected value
+    // prove the field is modeled rather than passed through untyped.
+    expect(Object.keys(Experience.shape)).toContain("job_duration_months");
+    // `null`: no start date, or a past position with no end date.
+    expect(Experience.parse({ job_duration_months: null }).job_duration_months).toBeNull();
+    expect(Experience.safeParse({ job_duration_months: "20" }).success).toBe(false);
+    // A past position on a full career (`enrichment.person`) carries it too.
+    const career = PersonEnrichmentResponse.parse({
+      found: true,
+      person: {
+        experiences: [
+          { job_start_date: "2025-05-01", job_is_current: true, job_duration_months: 19 },
+          {
+            job_start_date: "2022-01-01",
+            job_end_date: "2025-04-30",
+            job_is_current: false,
+            job_duration_months: 40,
+          },
+        ],
+      },
+    });
+    expect(career.person?.experiences.map((job) => job.job_duration_months)).toEqual([19, 40]);
   });
 
   it("parses company search", () => {

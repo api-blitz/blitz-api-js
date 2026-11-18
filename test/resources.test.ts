@@ -602,6 +602,18 @@ describe("2026-10-14 request fields", () => {
     });
   });
 
+  it("search.employee_finder sends job_title and job_description as given", async () => {
+    const sent = capture("/v2/search/employee-finder", data.EMPLOYEE_FINDER);
+    // Asymmetric lists, and a bracketed phrase: brackets are the API's exact-match syntax,
+    // so they must reach the wire untouched.
+    const filters = {
+      job_title: { include: ["[Head of Sales]", "Account Executive"], exclude: ["Intern"] },
+      job_description: { include: ["Salesforce"], exclude: [] },
+    } satisfies Pick<EmployeeFinderParams, "job_title" | "job_description">;
+    await client().search.employee_finder({ company_linkedin_url: COMPANY_URL, ...filters });
+    expect(sent()).toEqual({ company_linkedin_url: COMPANY_URL, ...filters, page: 1 });
+  });
+
   it("search.waterfall_icp sends is_recent_hire and the job-history flags per cascade tier", async () => {
     const sent = capture("/v2/search/waterfall-icp-keyword", data.WATERFALL_ICP);
     // Two tiers with different settings: the flags belong to a tier, not to the request.
@@ -667,6 +679,12 @@ describe("2026-10-14 request fields", () => {
     const companies: CompanySearchParams = { is_recent_hire: true };
     // @ts-expect-error `search.employee_finder` has no job-history flags
     const finder: EmployeeFinderParams = { ...url, include_past_jobs: true };
+    const finderTitle: EmployeeFinderParams = {
+      ...url,
+      // @ts-expect-error its `job_title` has no `include_linkedin_headline` (`search.people` only)
+      job_title: { include: ["CEO"], include_linkedin_headline: true },
+    };
+    expect(finderTitle.company_linkedin_url).toBe(COMPANY_URL);
     expect([
       people,
       tam,

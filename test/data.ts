@@ -36,6 +36,7 @@ const PERSON = {
       job_start_date: "2025-04-01",
       job_end_date: null,
       job_is_current: true,
+      job_duration_months: 20,
       job_contract_type: "Full-time",
       job_work_arrangement: "Hybrid",
       job_location: { city: "Sunnyvale", state_code: "CA", country_code: "US" },
