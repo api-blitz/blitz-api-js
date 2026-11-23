@@ -13,7 +13,7 @@
 The official **typed TypeScript SDK for the Blitz API** (https://blitz-api.ai), a
 B2B data / GTM REST API (people & company search, contact enrichment, utilities).
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
-behaves the same way over all 21 endpoints. `blitz-api-py` covers the same
+behaves the same way over all 22 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
 when changing any endpoint. (As of 2026-10-26 `blitz-api-py` 4.1.0 on `main` carries the
 `fair_usage` / `records_remaining` sync, `tam_by_people`, the `field_of_study` removal and
@@ -67,10 +67,11 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   usage block — `records_used`, `records_remaining` (`number | "unlimited"`),
   `next_reset_at`, `rate_limit.{requests_per_second,remaining_this_second}`, and
   `request_id`. `rate_limit` is absent on `key-info`, the one endpoint that is not
-  rate limited. Also mirrored in the `x-records-used`/`x-records-remaining` response
+  rate limited. The `200` of `/v2/feedback` is the one `/v2` success body without the
+  block (see the 2026-11-23 decision-log entry). Also mirrored in the `x-records-used`/`x-records-remaining` response
   headers; the SDK reads neither header.
 
-### Endpoint → method → response model (all 21)
+### Endpoint → method → response model (all 22)
 
 | HTTP | Path | SDK method | Response model |
 | --- | --- | --- | --- |
@@ -95,6 +96,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/enrichment/company-distribution-by-department` | `enrichment.company_distribution_by_department()` | `CompanyDistributionByDepartmentResponse` |
 | POST | `/v2/utils/current-date` | `utils.current_date()` | `CurrentDateResponse` |
 | GET | `/changelog/` | `changelog.list()` | `ChangelogResponse` |
+| POST | `/v2/feedback` | `feedback.send()` | `FeedbackResponse` |
 
 ### Re-deriving the API surface
 
@@ -201,7 +203,7 @@ src/
                   search.*, jobs.* and company.tam_by_* lists. CursorPage/OffsetPage
                   read results/cursor/total_pages straight off the response, via the
                   CursorEnvelope/OffsetEnvelope constraints — no accessor callbacks.
-  resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog).
+  resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog/feedback).
     paginate.ts   INTERNAL. cursor_page()/offset_page(): the one place a paginated method
                   builds its request — strips max_items, rewrites the paging key, threads
                   options into every page fetch. The seven paginated methods are one line each.
@@ -220,7 +222,7 @@ src/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement/MxProvider(66). Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
-    account/search/jobs/company/enrichment/utils/changelog.ts  Response schemas + inferred types per group.
+    account/search/jobs/company/enrichment/utils/changelog/feedback.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
 scripts/gen-enums.ts        --fetch pulls the live spec, de-dups, rewrites the cache + enums.ts;
                             default/--check render from the cache offline (CI drift guard).
@@ -378,7 +380,8 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   deployment that predates the block still parses. `MeteredValue`
   (`number | "unlimited"`) is shared by `FairUsage.records_remaining`,
   `KeyInfo.records_remaining`, and `KeyInfo.max_requests_per_seconds`. The public
-  `/changelog/` (a top-level array) is the one endpoint without the block.
+  `/changelog/` (a top-level array) and `/v2/feedback` are the two endpoints without the
+  block; `FeedbackResponse` is a plain `blitzObject`, exempted by name in the sweep.
 - **Every `array | null` list coerces to `[]`** through `blitzList`, with no
   exceptions — `experiences`, `skills`, `education`, `certifications` and
   `specialties`. `specialties` was the lone holdout until 2026-09-22 (see the
@@ -426,6 +429,26 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-11-23** — Added `feedback.send()` (`POST /v2/feedback`, changelog 2026-11-20), in a
+  new `client.feedback` namespace: the spec gives it its own `Feedback` tag, so its own
+  module per the one-module-per-tag rule. The path has one segment, so the method name
+  comes from the spec summary "Send Feedback", the same way `/changelog/` became
+  `changelog.list()`; same name in `blitz-api-py`. **Request:** `FeedbackParams` with
+  `subject` (1–200 characters), `message` (1–4,000) and `contact` (an email address, up to
+  200), all three required, and the spec closes the object (`additionalProperties: false`).
+  The limits and the email format are documented, not enforced (the list-caps posture), so
+  the server's `422` stays the one source of truth. Costs 0 records, and every API key can
+  call it, whatever routes the key has access to. **Response:** `FeedbackResponse`
+  `{success, message}`, a confirmation with no ticket id and no reply. **It has no
+  `fair_usage`:** the spec's `200` schema is closed and lists only those two keys, the only
+  `/v2` success body without the block (its `401` and `429` bodies carry it as usual). So
+  it is a plain `blitzObject`, not `v2_response`: a `fair_usage` field there would promise a
+  key the spec says cannot come back. The `models.test.ts` sweep exempts it by name in a
+  separate `NO_FAIR_USAGE` set rather than `SUB_MODELS`, which stays for nested models
+  only; if the API ever adds the block, `blitzObject` keeps it as an unknown key.
+  Same model and fields in `blitz-api-py`. No live call was made: a call would send real
+  feedback to the Blitz team.
 
 - **2026-11-18** — Synced the 2026-11-17 changelog entries and the three 2026-10-26
   entries against the runtime spec. **(1) Geo filters take `include`/`exclude`.**

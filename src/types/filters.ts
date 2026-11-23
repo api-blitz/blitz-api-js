@@ -657,6 +657,26 @@ export interface CurrentDateParams {
 }
 
 /**
+ * Params for `feedback.send` — a bug report, a feature request, or any other feedback
+ * for the Blitz team. All three fields are required; the API rejects any other field.
+ */
+export interface FeedbackParams {
+  /** One-line summary of the feedback, 1 to 200 characters. */
+  subject: string;
+  /**
+   * The feedback itself, as free text, 1 to 4,000 characters: what went wrong, what is
+   * missing, or what worked well. When it is about a request, include the endpoint, the
+   * request id from `fair_usage.request_id`, and what you expected.
+   */
+  message: string;
+  /**
+   * Email address where the Blitz team can reach the person who gives the feedback, up to
+   * 200 characters. Ask that person for it; do not guess it.
+   */
+  contact: string;
+}
+
+/**
  * Params for `changelog.list` — the public Blitz API changelog.
  *
  * The endpoint is **public** (no records, and it works regardless of API-key

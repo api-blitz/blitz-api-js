@@ -41,7 +41,8 @@ changes — it records the design decisions so you don't re-derive them.
   network blip or an upstream change.
 - **Build response envelopes with the factories in `src/types/envelopes.ts`**, never by
   hand: `v2_response(shape)` for any `/v2` response (it appends the shared `fair_usage`
-  block, so it can't be forgotten), `cursor_envelope(item)` for a cursor-paginated one,
+  block, so it can't be forgotten; the one exception is `FeedbackResponse`, whose spec
+  `200` schema has no `fair_usage`, listed in the sweep's `NO_FAIR_USAGE` set), `cursor_envelope(item)` for a cursor-paginated one,
   `search_envelope(item)` when it also reports `total_results`, `offset_fields(item)`
   spread into the one offset-paginated response. `envelopes.ts` is
   internal — like `models.ts` it is deliberately not re-exported from `types/index.ts`.
