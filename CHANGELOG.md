@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.0](https://github.com/api-blitz/blitz-api-js/compare/v3.4.0...v3.5.0) (2026-11-23)
+
+
+### Features
+
+* add feedback.send for POST /v2/feedback ([#41](https://github.com/api-blitz/blitz-api-js/issues/41)) ([92399e9](https://github.com/api-blitz/blitz-api-js/commit/92399e9819f8e793f7bf4812a2044bc27094a15a))
+
 ## [3.4.0](https://github.com/api-blitz/blitz-api-js/compare/v3.3.0...v3.4.0) (2026-11-18)
 
 
