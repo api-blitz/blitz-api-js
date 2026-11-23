@@ -19,6 +19,7 @@ import {
   EmailToPersonResponse,
   EmployeeFinderResponse,
   Experience,
+  FeedbackResponse,
   JobSearchResponse,
   KeyInfo,
   LinkedinToDomainResponse,
@@ -230,6 +231,13 @@ describe("response models", () => {
     expect(resp.timezone).toBe("America/New_York");
   });
 
+  it("parses feedback, whose spec response has no fair_usage block", () => {
+    const resp = FeedbackResponse.parse(data.FEEDBACK);
+    expect(resp.success).toBe(true);
+    expect(resp.message).toBe("Thanks, your feedback has been sent to the Blitz team.");
+    expect(Object.keys(FeedbackResponse.shape).sort()).toEqual(["message", "success"]);
+  });
+
   it("parses distribution by country", () => {
     const resp = CompanyDistributionByCountryResponse.parse(data.EMPLOYMENT_DISTRIBUTION);
     expect(resp.found).toBe(true);
@@ -356,18 +364,24 @@ describe("response models", () => {
       "WaterfallIcpMatch",
     ]);
 
+    // Endpoint models whose spec `200` schema has no `fair_usage`: the spec for
+    // `/v2/feedback` lists only `success` and `message`.
+    const NO_FAIR_USAGE = new Set(["FeedbackResponse"]);
+
     const missing: string[] = [];
     const responses: string[] = [];
     for (const [name, value] of Object.entries(api)) {
       // ChangelogResponse is a top-level array, not a ZodObject, so it is skipped.
-      if (!(value instanceof z.ZodObject) || SUB_MODELS.has(name)) continue;
+      if (!(value instanceof z.ZodObject) || SUB_MODELS.has(name) || NO_FAIR_USAGE.has(name)) {
+        continue;
+      }
       responses.push(name);
       if (!Object.keys(value.shape).includes("fair_usage")) missing.push(name);
     }
     expect(missing).toEqual([]);
     // Sanity-check the exemption list itself still describes real exports, so a
     // renamed or deleted sub-model can't quietly widen it.
-    expect([...SUB_MODELS].filter((name) => !(name in api))).toEqual([]);
+    expect([...SUB_MODELS, ...NO_FAIR_USAGE].filter((name) => !(name in api))).toEqual([]);
     expect(responses.length).toBeGreaterThanOrEqual(20);
   });
 

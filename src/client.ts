@@ -17,6 +17,7 @@ import { AccountResource } from "./resources/account.js";
 import { ChangelogResource } from "./resources/changelog.js";
 import { CompanyResource } from "./resources/company.js";
 import { EnrichmentResource } from "./resources/enrichment.js";
+import { FeedbackResource } from "./resources/feedback.js";
 import { JobsResource } from "./resources/jobs.js";
 import { SearchResource } from "./resources/search.js";
 import { UtilsResource } from "./resources/utils.js";
@@ -81,6 +82,7 @@ export class BlitzAPI {
   #enrichment?: EnrichmentResource;
   #utils?: UtilsResource;
   #changelog?: ChangelogResource;
+  #feedback?: FeedbackResource;
 
   constructor(options: BlitzAPIOptions = {}) {
     const apiKey = options.api_key ?? globalThis.process?.env?.[C.API_KEY_ENV_VAR];
@@ -219,6 +221,12 @@ export class BlitzAPI {
   get changelog(): ChangelogResource {
     this.#changelog ??= new ChangelogResource(this);
     return this.#changelog;
+  }
+
+  /** Feedback: send a bug report, a feature request, or other feedback to the Blitz team. */
+  get feedback(): FeedbackResource {
+    this.#feedback ??= new FeedbackResource(this);
+    return this.#feedback;
   }
 }
 

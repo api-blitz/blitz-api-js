@@ -175,7 +175,7 @@ always call the API from your backend.
 
 ## Endpoints
 
-All methods are grouped into seven namespaces:
+All methods are grouped into eight namespaces:
 
 | Namespace | Methods |
 | --- | --- |
@@ -186,6 +186,7 @@ All methods are grouped into seven namespaces:
 | `client.enrichment` | `person()`, `email()`, `phone()`, `email_to_person()`, `phone_to_person()`, `company()`, `domain_to_linkedin()`, `linkedin_to_domain()`, `company_distribution_by_country()`, `company_distribution_by_department()` |
 | `client.utils` | `current_date()` |
 | `client.changelog` | `list()` |
+| `client.feedback` | `send()` |
 
 Each method takes a single options object (snake_case keys) and returns a typed,
 Zod-validated response (also snake_case). Enum-backed filter fields (e.g.
@@ -201,8 +202,8 @@ import type { CompanyFilter, Industry } from "blitz-api-js";
 The seven list methods — `search.people`, `search.companies`, `search.employee_finder`,
 `jobs.search`, `jobs.company`, `company.tam_by_jobs`, `company.tam_by_people` — return a
 paginated `PagePromise` instead of a plain response (see [Pagination](#pagination)).
-`waterfall_icp`, `changelog.list`, and the `enrichment`/`utils`/`account` methods return
-their response directly.
+`waterfall_icp`, `changelog.list`, `feedback.send`, and the `enrichment`/`utils`/`account`
+methods return their response directly.
 
 The two `client.company` methods build a Total Addressable Market of companies, each
 result a company plus a match count (1 record per result): `tam_by_jobs` sizes accounts
@@ -234,6 +235,21 @@ for await (const match of client.company.tam_by_people({
 // Public changelog, last 30 days.
 const entries = await client.changelog.list({ days: 30 });
 for (const e of entries) console.log(e.date, e.type, e.title);
+```
+
+`client.feedback.send` sends a bug report, a feature request, or any other feedback to
+the Blitz team (0 records; every API key can call it, whatever endpoints the key has
+access to). `subject` (up to 200 characters), `message` (up to 4,000) and `contact` (the
+email address where the Blitz team can reach you) are all required. It returns a
+confirmation, with no ticket id and no reply:
+
+```ts
+const sent = await client.feedback.send({
+  subject: "Company search returns no results for French software companies",
+  message: "POST /v2/search/companies returns 0 results (request id …). I expected about 200 companies.",
+  contact: "jane@example.com",
+});
+console.log(sent.success, sent.message);
 ```
 
 `is_recent_hire` (people whose job started in the last 90 days) sits inside the `people`
@@ -422,7 +438,7 @@ console.log(page.response.fair_usage?.records_used);
 ```
 
 `rate_limit` is absent on `account.key_info()`, the one endpoint that is not rate
-limited. Every field is optional, so a response from a deployment that predates
+limited. `feedback.send()` returns no `fair_usage` block. Every field is optional, so a response from a deployment that predates
 the block still parses.
 
 ## Error handling

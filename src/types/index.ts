@@ -11,6 +11,7 @@ export * from "./changelog.js";
 export * from "./company.js";
 export * from "./enrichment.js";
 export * from "./enums.js";
+export * from "./feedback.js";
 export * from "./filters.js";
 export * from "./jobs.js";
 export * from "./search.js";

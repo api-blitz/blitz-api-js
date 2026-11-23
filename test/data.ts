@@ -285,6 +285,12 @@ export const TAM_BY_PEOPLE = {
   cursor: "example_cursor_tam_people_p2",
 };
 
+/** Result of `feedback.send`: the live spec's example. It carries no `fair_usage` block. */
+export const FEEDBACK = {
+  success: true,
+  message: "Thanks, your feedback has been sent to the Blitz team.",
+};
+
 /** Public changelog: a top-level array of entries, newest-first. */
 export const CHANGELOG = [
   {

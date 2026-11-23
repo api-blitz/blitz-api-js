@@ -20,6 +20,7 @@ import {
   CompanyEnrichmentResponse,
   CurrentDateResponse,
   EmailEnrichmentResponse,
+  FeedbackResponse,
   INDUSTRY,
   MX_PROVIDER,
   PersonEnrichmentResponse,
@@ -419,6 +420,34 @@ describe("resources", () => {
     );
     await client().utils.current_date();
     expect(body).toEqual({});
+  });
+
+  it("feedback.send posts subject, message and contact and types the response", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/feedback`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.FEEDBACK);
+      }),
+    );
+    const result = await client().feedback.send({
+      subject: "Company search returns no results for French software companies",
+      message: "POST /v2/search/companies returns 0 results. I expected about 200 companies.",
+      contact: "jane@example.com",
+    });
+    expect(FeedbackResponse.parse(result)).toBeTruthy();
+    expect(result.success).toBe(true);
+    expect(body).toEqual({
+      subject: "Company search returns no results for French software companies",
+      message: "POST /v2/search/companies returns 0 results. I expected about 200 companies.",
+      contact: "jane@example.com",
+    });
+  });
+
+  it("feedback.send requires all three fields", async () => {
+    server.use(http.post(`${BASE}/v2/feedback`, () => HttpResponse.json(data.FEEDBACK)));
+    // @ts-expect-error `contact` is required: the API returns 422 without it.
+    await client().feedback.send({ subject: "Bug", message: "Details" });
   });
 
   it("enrichment.company_distribution_by_country posts the company url and types the response", async () => {
