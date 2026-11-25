@@ -18,12 +18,14 @@ import {
   CompanyDistributionByCountryResponse,
   CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
+  CompanyMatchResponse,
   CurrentDateResponse,
   EmailEnrichmentResponse,
   FeedbackResponse,
   INDUSTRY,
   MX_PROVIDER,
   PersonEnrichmentResponse,
+  PersonMatchResponse,
   WaterfallIcpResponse,
 } from "../src/index.js";
 import * as data from "./data.js";
@@ -448,6 +450,58 @@ describe("resources", () => {
     server.use(http.post(`${BASE}/v2/feedback`, () => HttpResponse.json(data.FEEDBACK)));
     // @ts-expect-error `contact` is required: the API returns 422 without it.
     await client().feedback.send({ subject: "Bug", message: "Details" });
+  });
+
+  it("identity.person_match posts the name, a job title list and keywords as given", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/identity/person-match`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.PERSON_MATCH);
+      }),
+    );
+    const result = await client().identity.person_match({
+      last_name: "Durand",
+      first_name: "Marie",
+      company_domain: "acme.com",
+      job_title: ["Head of Finance", "Contrôleuse de gestion"],
+      keywords: ["fintech"],
+    });
+    expect(PersonMatchResponse.parse(result)).toBeTruthy();
+    expect(result.match?.full_name).toBe("Marie Durand");
+    expect(body).toEqual({
+      last_name: "Durand",
+      first_name: "Marie",
+      company_domain: "acme.com",
+      job_title: ["Head of Finance", "Contrôleuse de gestion"],
+      keywords: ["fintech"],
+    });
+  });
+
+  it("identity.person_match requires last_name", async () => {
+    server.use(
+      http.post(`${BASE}/v2/identity/person-match`, () => HttpResponse.json(data.PERSON_MATCH)),
+    );
+    // @ts-expect-error `last_name` is required: the API returns 422 without it.
+    await client().identity.person_match({ first_name: "Marie" });
+  });
+
+  it("identity.company_match posts only the fields given", async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${BASE}/v2/identity/company-match`, async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(data.COMPANY_MATCH_AMBIGUOUS);
+      }),
+    );
+    const result = await client().identity.company_match({
+      company_domain: "acme.com",
+      location: "Lyon, France",
+    });
+    expect(CompanyMatchResponse.parse(result)).toBeTruthy();
+    expect(result.status).toBe("ambiguous");
+    expect(result.match).toBeNull();
+    expect(body).toEqual({ company_domain: "acme.com", location: "Lyon, France" });
   });
 
   it("enrichment.company_distribution_by_country posts the company url and types the response", async () => {

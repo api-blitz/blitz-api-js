@@ -13,7 +13,7 @@
 The official **typed TypeScript SDK for the Blitz API** (https://blitz-api.ai), a
 B2B data / GTM REST API (people & company search, contact enrichment, utilities).
 It is an **idiomatic, async-only port of the Python SDK `blitz-api-py`** and
-behaves the same way over all 22 endpoints. `blitz-api-py` covers the same
+behaves the same way over all 24 endpoints. `blitz-api-py` covers the same
 surface, jobs included — keep the two at parity, and cross-check the sibling SDK
 when changing any endpoint. (As of 2026-10-26 `blitz-api-py` 4.1.0 on `main` carries the
 `fair_usage` / `records_remaining` sync, `tam_by_people`, the `field_of_study` removal and
@@ -71,7 +71,7 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
   block (see the 2026-11-23 decision-log entry). Also mirrored in the `x-records-used`/`x-records-remaining` response
   headers; the SDK reads neither header.
 
-### Endpoint → method → response model (all 22)
+### Endpoint → method → response model (all 24)
 
 | HTTP | Path | SDK method | Response model |
 | --- | --- | --- | --- |
@@ -97,6 +97,8 @@ Distribution name: **`blitz-api-js`** (npm, unscoped, public).
 | POST | `/v2/utils/current-date` | `utils.current_date()` | `CurrentDateResponse` |
 | GET | `/changelog/` | `changelog.list()` | `ChangelogResponse` |
 | POST | `/v2/feedback` | `feedback.send()` | `FeedbackResponse` |
+| POST | `/v2/identity/person-match` | `identity.person_match()` | `PersonMatchResponse` |
+| POST | `/v2/identity/company-match` | `identity.company_match()` | `CompanyMatchResponse` |
 
 ### Re-deriving the API surface
 
@@ -203,7 +205,7 @@ src/
                   search.*, jobs.* and company.tam_by_* lists. CursorPage/OffsetPage
                   read results/cursor/total_pages straight off the response, via the
                   CursorEnvelope/OffsetEnvelope constraints — no accessor callbacks.
-  resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog/feedback).
+  resources/      One module per resource namespace (account/search/jobs/company/enrichment/utils/changelog/feedback/identity).
     paginate.ts   INTERNAL. cursor_page()/offset_page(): the one place a paginated method
                   builds its request — strips max_items, rewrites the paging key, threads
                   options into every page fetch. The seven paginated methods are one line each.
@@ -222,7 +224,7 @@ src/
                   SalesRegion/JobFunction/JobLevel/LastFundingType/Seniority/
                   EmploymentType/WorkArrangement/MxProvider(66). Never hand-edit (see §7).
     filters.ts    Request filter interfaces + *Value aliases + per-method *Params interfaces.
-    account/search/jobs/company/enrichment/utils/changelog/feedback.ts  Response schemas + inferred types per group.
+    account/search/jobs/company/enrichment/utils/changelog/feedback/identity.ts  Response schemas + inferred types per group.
     index.ts      Re-exports the public type surface.
 scripts/gen-enums.ts        --fetch pulls the live spec, de-dups, rewrites the cache + enums.ts;
                             default/--check render from the cache offline (CI drift guard).
@@ -429,6 +431,29 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ---
 
 ## 10. Decision log
+
+- **2026-11-25** — Added `identity.person_match()` (`POST /v2/identity/person-match`) and
+  `identity.company_match()` (`POST /v2/identity/company-match`), changelog 2026-11-25, in a
+  new `client.identity` namespace: the namespace is the path group, and the method names are
+  the path's last segment with the hyphen as an underscore; same names in `blitz-api-py`.
+  **Requests:** `PersonMatchParams` (`last_name` required; `first_name`, `company_name`,
+  `company_domain`, `company_linkedin_url`, `job_title` as one string or a list of up to 10,
+  `keywords` up to 20, `location`) and `CompanyMatchParams` (all optional, and the API needs
+  at least one of `company_name`, `company_domain` and `company_linkedin_url`). The spec
+  closes both objects. The "at least one" rule and the length limits are documented, not
+  enforced, so the server's `422` stays the one source of truth. **Responses:**
+  `PersonMatchResponse` / `CompanyMatchResponse` built with `v2_response`: `status`, `match`
+  (`null` unless `status` is `matched`) and `candidates` (up to 10). `status` is a loose
+  string with its three values (`matched`, `ambiguous`, `not_found`) in the doc comment, the
+  `ChangelogEntry.type` posture, so a new value never breaks parsing; it is a response
+  enum, so `gen-enums` (request properties only) does not emit it. The items are the new
+  `PersonMatch` (`linkedin_url`, `full_name`, `job_title`, `company_name`, `location` as the
+  shared `Location`, `confidence`, `past_experiences` of `MatchPastExperience`
+  `{company_name, job_title}`) and `CompanyMatch` (`linkedin_url`, `name`, `domain`,
+  `industry`, `size`, `location` as the shared `HQ`, whose six spec keys it carries,
+  `confidence`); all three are in the sweep's `SUB_MODELS`. Cost: 1 record for `matched` or
+  `ambiguous`, 0 for `not_found`. No live call was made; the fixtures use the spec's
+  property examples.
 
 - **2026-11-23** — Added `feedback.send()` (`POST /v2/feedback`, changelog 2026-11-20), in a
   new `client.feedback` namespace: the spec gives it its own `Feedback` tag, so its own

@@ -10,6 +10,7 @@ import {
   CompanyDistributionByDepartmentResponse,
   CompanyEnrichmentResponse,
   CompanyJobsResponse,
+  CompanyMatchResponse,
   CompanySearchResponse,
   CurrentDateResponse,
   DomainToLinkedinResponse,
@@ -26,6 +27,7 @@ import {
   MxRecord,
   PeopleSearchResponse,
   PersonEnrichmentResponse,
+  PersonMatchResponse,
   PhoneEnrichmentResponse,
   PhoneToPersonResponse,
   TamByJobsResponse,
@@ -238,6 +240,27 @@ describe("response models", () => {
     expect(Object.keys(FeedbackResponse.shape).sort()).toEqual(["message", "success"]);
   });
 
+  it("parses a matched person, with its location and past jobs", () => {
+    const resp = PersonMatchResponse.parse(data.PERSON_MATCH);
+    expect(resp.status).toBe("matched");
+    expect(resp.match?.confidence).toBe(0.96);
+    expect(resp.match?.location?.state_code).toBe("MI");
+    expect(resp.match?.past_experiences).toEqual([
+      { company_name: "Acme", job_title: "Contrôleuse de gestion" },
+    ]);
+    expect(resp.candidates).toEqual([]);
+    expect(resp.fair_usage?.records_used).toBe(1);
+  });
+
+  it("parses an ambiguous company match: no match, a candidate with an HQ location", () => {
+    const resp = CompanyMatchResponse.parse(data.COMPANY_MATCH_AMBIGUOUS);
+    expect(resp.status).toBe("ambiguous");
+    expect(resp.match).toBeNull();
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]?.location?.state).toBe("Uttar Pradesh");
+    expect(resp.candidates[0]?.location?.country_name).toBe("India");
+  });
+
   it("parses distribution by country", () => {
     const resp = CompanyDistributionByCountryResponse.parse(data.EMPLOYMENT_DISTRIBUTION);
     expect(resp.found).toBe(true);
@@ -346,6 +369,7 @@ describe("response models", () => {
       "ChangelogEntry",
       "ChangelogLink",
       "Company",
+      "CompanyMatch",
       "CountryDistributionItem",
       "DepartmentDistributionItem",
       "DomainToLinkedinMatch",
@@ -357,8 +381,10 @@ describe("response models", () => {
       "HQ",
       "Job",
       "Location",
+      "MatchPastExperience",
       "MxRecord",
       "Person",
+      "PersonMatch",
       "TamByJobsMatch",
       "TamByPeopleMatch",
       "WaterfallIcpMatch",

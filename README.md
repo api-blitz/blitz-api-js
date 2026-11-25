@@ -175,7 +175,7 @@ always call the API from your backend.
 
 ## Endpoints
 
-All methods are grouped into eight namespaces:
+All methods are grouped into nine namespaces:
 
 | Namespace | Methods |
 | --- | --- |
@@ -187,6 +187,7 @@ All methods are grouped into eight namespaces:
 | `client.utils` | `current_date()` |
 | `client.changelog` | `list()` |
 | `client.feedback` | `send()` |
+| `client.identity` | `person_match()`, `company_match()` |
 
 Each method takes a single options object (snake_case keys) and returns a typed,
 Zod-validated response (also snake_case). Enum-backed filter fields (e.g.
@@ -202,7 +203,7 @@ import type { CompanyFilter, Industry } from "blitz-api-js";
 The seven list methods — `search.people`, `search.companies`, `search.employee_finder`,
 `jobs.search`, `jobs.company`, `company.tam_by_jobs`, `company.tam_by_people` — return a
 paginated `PagePromise` instead of a plain response (see [Pagination](#pagination)).
-`waterfall_icp`, `changelog.list`, `feedback.send`, and the `enrichment`/`utils`/`account`
+`waterfall_icp`, `changelog.list`, `feedback.send`, and the `enrichment`/`identity`/`utils`/`account`
 methods return their response directly.
 
 The two `client.company` methods build a Total Addressable Market of companies, each
@@ -250,6 +251,26 @@ const sent = await client.feedback.send({
   contact: "jane@example.com",
 });
 console.log(sent.success, sent.message);
+```
+
+The two `client.identity` methods find the person behind a name, or the company behind a
+name, a domain or a LinkedIn URL. Each returns a `status` of `matched` (the answer is in
+`match`, with a `confidence` from 0 to 1), `ambiguous` (choose among up to 10
+`candidates`) or `not_found`. 1 record for `matched` or `ambiguous`, 0 records for
+`not_found`. `person_match` needs `last_name`; `company_match` needs at least one of
+`company_name`, `company_domain` and `company_linkedin_url`:
+
+```ts
+const person = await client.identity.person_match({
+  last_name: "Durand",
+  first_name: "Marie",
+  company_domain: "acme.com",
+  job_title: "Head of Finance",
+});
+if (person.status === "matched") console.log(person.match?.linkedin_url, person.match?.confidence);
+
+const company = await client.identity.company_match({ company_name: "Acme", location: "Lyon, France" });
+for (const c of company.candidates) console.log(c.name, c.domain, c.confidence);
 ```
 
 `is_recent_hire` (people whose job started in the last 90 days) sits inside the `people`
