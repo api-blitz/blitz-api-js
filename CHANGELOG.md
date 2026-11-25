@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.0](https://github.com/api-blitz/blitz-api-js/compare/v3.5.0...v3.6.0) (2026-11-25)
+
+
+### Features
+
+* add identity.person_match and identity.company_match ([#43](https://github.com/api-blitz/blitz-api-js/issues/43)) ([e81ef3e](https://github.com/api-blitz/blitz-api-js/commit/e81ef3e6bca12a00c7b439ba5525278c4a29a2ab))
+
 ## [3.5.0](https://github.com/api-blitz/blitz-api-js/compare/v3.4.0...v3.5.0) (2026-11-23)
 
 
