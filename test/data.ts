@@ -285,6 +285,63 @@ export const TAM_BY_PEOPLE = {
   cursor: "example_cursor_tam_people_p2",
 };
 
+/** Shared `fair_usage` block of the identity fixtures, from the live spec examples. */
+const MATCH_FAIR_USAGE = {
+  records_used: 1,
+  records_remaining: 9913547,
+  next_reset_at: "2026-09-29T10:25:23.155Z",
+  rate_limit: { requests_per_second: 100, remaining_this_second: 97 },
+  request_id: "019bae09-0055-7441-b2ea-16086e499219",
+};
+
+/** `identity.person_match` with `status: "matched"`, built from the live spec examples. */
+export const PERSON_MATCH = {
+  status: "matched",
+  match: {
+    linkedin_url: "https://www.linkedin.com/in/marie-durand-exemple",
+    full_name: "Marie Durand",
+    job_title: "Head of Finance",
+    company_name: "Nova",
+    location: {
+      city: "Sturgis",
+      state_code: "MI",
+      country_code: "US",
+      continent: "North America",
+      postal_code: "49091",
+      street_address: "1200 N Centerville Rd",
+    },
+    confidence: 0.96,
+    past_experiences: [{ company_name: "Acme", job_title: "Contrôleuse de gestion" }],
+  },
+  candidates: [],
+  fair_usage: MATCH_FAIR_USAGE,
+};
+
+/** `identity.company_match` with `status: "ambiguous"`: no `match`, and a candidate list. */
+export const COMPANY_MATCH_AMBIGUOUS = {
+  status: "ambiguous",
+  match: null,
+  candidates: [
+    {
+      linkedin_url: "https://www.linkedin.com/company/acme-exemple",
+      name: "Acme",
+      domain: "acme.com",
+      industry: "Software Development",
+      size: "51-200",
+      location: {
+        city: "Noida",
+        state: "Uttar Pradesh",
+        country_code: "IN",
+        country_name: "India",
+        region: "APAC",
+        continent: "Asia",
+      },
+      confidence: 0.62,
+    },
+  ],
+  fair_usage: MATCH_FAIR_USAGE,
+};
+
 /** Result of `feedback.send`: the live spec's example. It carries no `fair_usage` block. */
 export const FEEDBACK = {
   success: true,

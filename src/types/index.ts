@@ -13,6 +13,7 @@ export * from "./enrichment.js";
 export * from "./enums.js";
 export * from "./feedback.js";
 export * from "./filters.js";
+export * from "./identity.js";
 export * from "./jobs.js";
 export * from "./search.js";
 export * from "./shared.js";

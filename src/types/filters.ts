@@ -677,6 +677,73 @@ export interface FeedbackParams {
 }
 
 /**
+ * Params for `identity.person_match`. Only `last_name` is required; each other field makes
+ * the answer more exact. The API rejects any other field. String fields are 1 to 100
+ * characters (`first_name`, `last_name`, each keyword) or 1 to 200 (the others).
+ */
+export interface PersonMatchParams {
+  /**
+   * Last name. An initial (`D.`) is accepted. Hyphens, apostrophes, particles (van der,
+   * de la), suffixes (Jr, PhD) and typos are tolerated.
+   */
+  last_name: string;
+  /** First name. Accents, nicknames (Bob for Robert), typos and an initial are tolerated. */
+  first_name?: string;
+  /**
+   * Name of a company the person works or worked at, compared with the current and the past
+   * companies of the profile. A domain typed here is read as `company_domain`.
+   */
+  company_name?: string;
+  /**
+   * Web domain of that company. A full URL is reduced to its domain. A domain that does not
+   * match lowers the confidence; it does not exclude the person.
+   */
+  company_domain?: string;
+  /** LinkedIn page URL of that company. The match is exact. */
+  company_linkedin_url?: string;
+  /**
+   * One job title, or a list of up to 10, compared with the current and the past job titles
+   * of the profile; the best one counts.
+   */
+  job_title?: string | string[];
+  /**
+   * Up to 20 words looked for in the headline, the about text, the job descriptions and the
+   * skills. They tell candidates apart; they never exclude one.
+   */
+  keywords?: string[];
+  /** City, region or country of the person, such as `Lyon, France`. */
+  location?: string;
+}
+
+/**
+ * Params for `identity.company_match`. Give at least one of `company_name`,
+ * `company_domain` and `company_linkedin_url`; the API rejects any other field.
+ * `company_name` and `location` are 1 to 200 characters, each keyword 1 to 100.
+ */
+export interface CompanyMatchParams {
+  /**
+   * Name of the company. Legal suffixes (Inc, LLC, GmbH), accents, punctuation and small
+   * typos are tolerated. A domain typed here is read as `company_domain`.
+   */
+  company_name?: string;
+  /**
+   * Web domain of the company, the most reliable field. A full URL is reduced to its domain.
+   * When several pages share the domain, the answer is `ambiguous` and lists them, unless a
+   * `location` agrees with the first page.
+   */
+  company_domain?: string;
+  /** LinkedIn page URL of the company. The match is exact. */
+  company_linkedin_url?: string;
+  /**
+   * Up to 20 words looked for in the about text, the industry and the specialties. They
+   * tell candidates apart; they never exclude one.
+   */
+  keywords?: string[];
+  /** City, region or country of the headquarters, such as `Lyon, France`. */
+  location?: string;
+}
+
+/**
  * Params for `changelog.list` — the public Blitz API changelog.
  *
  * The endpoint is **public** (no records, and it works regardless of API-key

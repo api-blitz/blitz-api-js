@@ -18,6 +18,7 @@ import { ChangelogResource } from "./resources/changelog.js";
 import { CompanyResource } from "./resources/company.js";
 import { EnrichmentResource } from "./resources/enrichment.js";
 import { FeedbackResource } from "./resources/feedback.js";
+import { IdentityResource } from "./resources/identity.js";
 import { JobsResource } from "./resources/jobs.js";
 import { SearchResource } from "./resources/search.js";
 import { UtilsResource } from "./resources/utils.js";
@@ -83,6 +84,7 @@ export class BlitzAPI {
   #utils?: UtilsResource;
   #changelog?: ChangelogResource;
   #feedback?: FeedbackResource;
+  #identity?: IdentityResource;
 
   constructor(options: BlitzAPIOptions = {}) {
     const apiKey = options.api_key ?? globalThis.process?.env?.[C.API_KEY_ENV_VAR];
@@ -227,6 +229,12 @@ export class BlitzAPI {
   get feedback(): FeedbackResource {
     this.#feedback ??= new FeedbackResource(this);
     return this.#feedback;
+  }
+
+  /** Identity: find the person behind a name, or the company behind a name or domain. */
+  get identity(): IdentityResource {
+    this.#identity ??= new IdentityResource(this);
+    return this.#identity;
   }
 }
 
