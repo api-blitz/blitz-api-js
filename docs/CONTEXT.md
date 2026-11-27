@@ -381,7 +381,8 @@ from 3.0.0 on. Code matching the *string* `"FairUsageLimitError"` breaks now, no
   as `fair_usage: FairUsage.nullish()` — optional everywhere so a response from a
   deployment that predates the block still parses. `MeteredValue`
   (`number | "unlimited"`) is shared by `FairUsage.records_remaining`,
-  `KeyInfo.records_remaining`, and `KeyInfo.max_requests_per_seconds`. The public
+  `KeyInfo.records_remaining`, `KeyInfo.max_requests_per_seconds`, and
+  `SearchLimit.max_results_total`. The public
   `/changelog/` (a top-level array) and `/v2/feedback` are the two endpoints without the
   block; `FeedbackResponse` is a plain `blitzObject`, exempted by name in the sweep.
 - **Every `array | null` list coerces to `[]`** through `blitzList`, with no
@@ -432,6 +433,17 @@ bootstrap) is documented in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## 10. Decision log
 
+- **2026-11-27** — Added `KeyInfo.limits` (changelog 2026-11-27, "Your plan can set how many
+  results a search returns across all pages"): a `blitzList` of the new `SearchLimit` sub-model
+  (`path`, `max_results_per_page`, `max_results_total` as `MeteredValue`, since the spec types it
+  `number | "unlimited"`), one entry per search endpoint. Same names in `blitz-api-py`.
+  `SearchLimit` is in the sweep's `SUB_MODELS` set. The same version raised the spec's
+  `max_results` maximum on the seven paginated endpoints from 50 to 10000: the per-page limit is
+  now 50 or the plan's `max_results_per_page`. The SDK never enforced the 50, so only the doc
+  comments changed; the server's `422` stays the one source of truth. The other 2026-11-27
+  entries need no SDK change: the TAM fix (the last page now returns a `null` cursor) only makes
+  `CursorPage` stop one request earlier, the refund change is server side, and the MCP change
+  is outside the SDK.
 - **2026-11-25** — Added `identity.person_match()` (`POST /v2/identity/person-match`) and
   `identity.company_match()` (`POST /v2/identity/company-match`), changelog 2026-11-25, in a
   new `client.identity` namespace: the namespace is the path group, and the method names are

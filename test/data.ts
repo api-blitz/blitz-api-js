@@ -109,6 +109,10 @@ export const KEY_INFO = {
   records_remaining: 99.5,
   next_reset_at: "2026-02-12T17:48:25.199Z",
   max_requests_per_seconds: 5,
+  limits: [
+    { path: "/search/people", max_results_per_page: 50, max_results_total: 50000 },
+    { path: "/jobs/search", max_results_per_page: 100, max_results_total: "unlimited" },
+  ],
   allowed_apis: ["/enrichment/email", "/search/people"],
   active_plans: [
     { name: "Unlimited Leads", status: "active", started_at: "2026-01-12T17:48:25.200Z" },

@@ -44,6 +44,10 @@ describe("response models", () => {
     expect(info.allowed_apis).toEqual(["/enrichment/email", "/search/people"]);
     expect(info.active_plans[0]?.name).toBe("Unlimited Leads");
     expect(info.records_remaining).toBe(99.5);
+    expect(info.limits).toEqual([
+      { path: "/search/people", max_results_per_page: 50, max_results_total: 50000 },
+      { path: "/jobs/search", max_results_per_page: 100, max_results_total: "unlimited" },
+    ]);
     // key-info is the one endpoint that is not rate limited, so it carries no `rate_limit`.
     expect(info.fair_usage?.request_id).toBe("019bae09-0055-7441-b2ea-16086e499219");
     expect(info.fair_usage?.rate_limit).toBeUndefined();
@@ -57,6 +61,8 @@ describe("response models", () => {
     const info = KeyInfo.parse(data.KEY_INFO_UNLIMITED);
     expect(info.records_remaining).toBe("unlimited");
     expect(info.max_requests_per_seconds).toBe("unlimited");
+    // A response without `limits` still parses, to an empty list.
+    expect(info.limits).toEqual([]);
   });
 
   it("parses people search with a nested person", () => {
@@ -385,6 +391,7 @@ describe("response models", () => {
       "MxRecord",
       "Person",
       "PersonMatch",
+      "SearchLimit",
       "TamByJobsMatch",
       "TamByPeopleMatch",
       "WaterfallIcpMatch",

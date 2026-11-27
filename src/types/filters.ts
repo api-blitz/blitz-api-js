@@ -501,7 +501,11 @@ export interface JobCompanyFilter {
  * limit. Bound the total with `max_items`.
  */
 export interface CursorPaginatedParams {
-  /** Results **per page** (1–50, default 10). The API bills 1 record per result returned. */
+  /**
+   * Results **per page** (default 10): up to 50, or up to your plan's `max_results_per_page`
+   * for the endpoint in `account.key_info().limits`; a larger value returns `422`. The API
+   * bills 1 record per result returned.
+   */
   max_results?: number;
   /** Pass back the `cursor` from the previous page; `null` there means the walk is done. */
   cursor?: string;
@@ -616,7 +620,7 @@ export interface WaterfallIcpParams {
   cascade: CascadeTier[];
   /** Minimum LinkedIn connections for a match. Server defaults to `0`. */
   profile_min_connections?: number;
-  /** Results to return (1–100, default 10) — a higher ceiling than the paginated endpoints' 50. */
+  /** Results to return (1–100, default 10) — a higher ceiling than the paginated endpoints' default of 50. */
   max_results?: number;
 }
 

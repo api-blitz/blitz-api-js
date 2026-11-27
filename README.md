@@ -60,6 +60,8 @@ const client = new BlitzAPI();
 // Health-check the key before a batch job.
 const info = await client.account.key_info();
 console.log(info.valid, info.records_remaining, info.max_requests_per_seconds);
+// Result limits per search endpoint: page size and total across all pages.
+for (const limit of info.limits) console.log(limit.path, limit.max_results_per_page, limit.max_results_total);
 
 // LinkedIn profile URL -> verified work email.
 const email = await client.enrichment.email({
@@ -357,10 +359,12 @@ missing, or when a past position has no `job_end_date`.
 page or `for await` to stream every item across all pages — each page is fetched on
 demand, through the client's rate limiter.
 
-> **`max_results` is the page size, not a total.** It's "results per page" (1–50), and
+> **`max_results` is the page size, not a total.** It's "results per page" (up to 50, or
+> your plan's `max_results_per_page` from `key_info().limits`), and
 > the API **bills 1 record per result returned**. A bare `for await` streams *every*
-> match up to the server-side limit (people: 50k results / 1k pages; employee finder:
-> 10k; jobs: 5k), which can be a lot of records. To bound it, pass **`max_items`** (a
+> match up to the server-side limit (by default people / companies / TAM: 50k results;
+> employee finder: 10k; jobs: 5k; your plan's values are `max_results_total` in
+> `key_info().limits`), which can be a lot of records. To bound it, pass **`max_items`** (a
 > client-side total cap — never sent on the wire), `break` out of the loop, or drive
 > pages manually.
 
