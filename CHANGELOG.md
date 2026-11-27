@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.0](https://github.com/api-blitz/blitz-api-js/compare/v3.6.0...v3.7.0) (2026-11-27)
+
+
+### Features
+
+* add limits to account.key_info() ([#45](https://github.com/api-blitz/blitz-api-js/issues/45)) ([0874ecc](https://github.com/api-blitz/blitz-api-js/commit/0874ecc6ede5074f735d3d7ee3a89de36b7ed0da))
+
 ## [3.6.0](https://github.com/api-blitz/blitz-api-js/compare/v3.5.0...v3.6.0) (2026-11-25)
 
 
